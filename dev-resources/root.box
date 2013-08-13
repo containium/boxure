@@ -1,0 +1,4 @@
+{:name "root"
+ :module-paths ["modules/module.jar"]
+ :nested-box-paths []
+ :config {:root-config-value "whoop"}}
