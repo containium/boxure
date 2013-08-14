@@ -4,11 +4,12 @@
 
 (ns boxure.core
   (:require [clojure.edn :as edn]
+            [clojure.java.io :refer (as-url)]
             [leiningen.core.project :refer (init-profiles project-with-profiles)]
             [leiningen.core.classpath :refer (resolve-dependencies)]
             [classlojure.core :refer (classlojure eval-in)])
   (:import [java.util.jar JarFile]
-           [clojure.lang RT Compiler])
+           [clojure.lang RT Compiler DynamicClassLoader])
   (:gen-class))
 
 
@@ -71,6 +72,15 @@
         (assoc boxure :project project)))))
 
 
+(defn- cl-hierarchy-str
+  [cl]
+  (loop [acc [cl]
+         parent (.getParent cl)]
+    (if parent
+      (recur (conj acc parent) (.getParent parent))
+      (apply str (interpose " => " acc)))))
+
+
 (defn- run-box
   [spec-path]
   (let [{:keys [name module-paths config] :as spec}
@@ -82,18 +92,40 @@
             classpath (for [spec module-specs
                             dep (resolve-dependencies :dependencies (:project spec))]
                         (.getAbsolutePath dep))]
+        (println "Classpath:" classpath)
         (doseq [i (range 100)]
-          (let [box-cl (#'classlojure.core/url-classloader (map (partial str "file:") classpath)
-                                                           classlojure.core/ext-classloader)]
-            (println "Number" i)
-            ;; (classlojure.core/eval-in* box-cl '(println *clojure-version*))
-            (println (classlojure.core/with-classloader box-cl
-                       (->> (pr-str '(println *clojure-version*))
-                            (classlojure.core/invoke-in box-cl clojure.lang.RT/readString [String])
-                            (classlojure.core/invoke-in box-cl clojure.lang.Compiler/eval [Object])
-                            (classlojure.core/invoke-in box-cl clojure.lang.RT/printString [Object]))))
-            (System/gc)
-            (Thread/sleep 5000))
+          (let [box-cl (java.lang.ref.WeakReference. (#'classlojure.core/url-classloader (map (partial str "file:") classpath)
+                                                            classlojure.core/ext-classloader))
+                ;; box-cl (java.lang.ref.WeakReference. (DynamicClassLoader. classlojure.core/ext-classloader))
+                box-cl (do
+                         #_(doseq [cp classpath]
+                           (.addURL (.get box-cl) (as-url (str "file:" cp))))
+
+                         (println "Number" i)
+                         ;; (classlojure.core/eval-in* box-cl '(println *clojure-version*))
+                         (println "Root RT baseloader" (cl-hierarchy-str (RT/baseLoader)))
+                         (println "Root RT classloader" (cl-hierarchy-str (.getClassLoader RT)))
+                         (println "Root context CL" (binding [*use-context-classloader* true]
+                                                      (cl-hierarchy-str (RT/baseLoader))))
+                         (classlojure.core/with-classloader (.get box-cl)
+                           (println "Box RT baseloader" (cl-hierarchy-str (classlojure.core/invoke-in (.get box-cl) clojure.lang.RT/baseLoader [])))
+                           (println "Box Var classloader" (cl-hierarchy-str (.. (classlojure.core/invoke-in (.get box-cl) clojure.lang.RT/var [String String] "foo" "bar")
+                                                                                getClass
+                                                                                getClassLoader))))
+                         (println "------------------------------------------------")
+                         (classlojure.core/with-classloader (.get box-cl)
+                           (println (->> (let [s (pr-str '(do (binding []
+                                                                (+)
+                                                                (shutdown-agents))))]
+                                           (println s) s) ; flabbergasted. (or) works, (+) does not..
+                                         (classlojure.core/invoke-in (.get box-cl) clojure.lang.RT/readString [String])
+                                         (classlojure.core/invoke-in (.get box-cl) clojure.lang.Compiler/eval [Object])
+                                         (classlojure.core/invoke-in (.get box-cl) clojure.lang.RT/printString [Object])
+                                         )
+                                    nil))
+                         nil)])
+          (System/gc)
+          (Thread/sleep 5000)
           ;; (let [box-cl (apply classlojure (map (partial str "file:") classpath))]
           ;;   (println (eval-in box-cl '*clojure-version*) "- deploy number" i)
           ;;   (eval-in box-cl '(clojure.core/shutdown-agents))
@@ -110,6 +142,8 @@
           ;;   (Thread/sleep 2000))
           )))))
 
+
+;;--- TODO: Make it a library, if possible.
 
 (defn -main
   "I do a whole lot."

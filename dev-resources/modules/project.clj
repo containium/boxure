@@ -9,4 +9,5 @@
   :exclusions [org.clojure/clojure]
   :boxure {:start module.core/start
            :stop module.core/stop
+           :ring-var module.core/app
            :config {:module/connect "localhost:123"}})
