@@ -114,14 +114,17 @@
                                                                                 getClassLoader))))
                          (println "------------------------------------------------")
                          (classlojure.core/with-classloader (.get box-cl)
-                           (println (->> (let [s (pr-str '(do (binding []
-                                                                (+)
+                           (println (->> (let [s (pr-str '(do (let [a 5]
+                                                                (prn (+ 37 a))
                                                                 (shutdown-agents))))]
                                            (println s) s) ; flabbergasted. (or) works, (+) does not..
                                          (classlojure.core/invoke-in (.get box-cl) clojure.lang.RT/readString [String])
                                          (classlojure.core/invoke-in (.get box-cl) clojure.lang.Compiler/eval [Object])
-                                         (classlojure.core/invoke-in (.get box-cl) clojure.lang.RT/printString [Object])
-                                         )
+                                         (classlojure.core/invoke-in (.get box-cl) clojure.lang.RT/printString [Object]))
+                                    (-> (.get box-cl)
+                                        (.loadClass "clojure.lang.Var")
+                                        (.getDeclaredMethod "resetThreadBindingFrame" (into-array Class [Object]))
+                                        (.invoke (.loadClass (.get box-cl) "clojure.lang.Var") (into-array Object [nil])))
                                     nil))
                          nil)])
           (System/gc)
