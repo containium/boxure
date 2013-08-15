@@ -94,56 +94,26 @@
                         (.getAbsolutePath dep))]
         (println "Classpath:" classpath)
         (doseq [i (range 100)]
-          (let [box-cl (java.lang.ref.WeakReference. (#'classlojure.core/url-classloader (map (partial str "file:") classpath)
-                                                            classlojure.core/ext-classloader))
-                ;; box-cl (java.lang.ref.WeakReference. (DynamicClassLoader. classlojure.core/ext-classloader))
-                box-cl (do
-                         #_(doseq [cp classpath]
-                           (.addURL (.get box-cl) (as-url (str "file:" cp))))
-
-                         (println "Number" i)
-                         ;; (classlojure.core/eval-in* box-cl '(println *clojure-version*))
-                         (println "Root RT baseloader" (cl-hierarchy-str (RT/baseLoader)))
-                         (println "Root RT classloader" (cl-hierarchy-str (.getClassLoader RT)))
-                         (println "Root context CL" (binding [*use-context-classloader* true]
-                                                      (cl-hierarchy-str (RT/baseLoader))))
-                         (classlojure.core/with-classloader (.get box-cl)
-                           (println "Box RT baseloader" (cl-hierarchy-str (classlojure.core/invoke-in (.get box-cl) clojure.lang.RT/baseLoader [])))
-                           (println "Box Var classloader" (cl-hierarchy-str (.. (classlojure.core/invoke-in (.get box-cl) clojure.lang.RT/var [String String] "foo" "bar")
-                                                                                getClass
-                                                                                getClassLoader))))
-                         (println "------------------------------------------------")
-                         (classlojure.core/with-classloader (.get box-cl)
-                           (println (->> (let [s (pr-str '(do (let [a 5]
-                                                                (prn (+ 37 a))
-                                                                (shutdown-agents))))]
-                                           (println s) s) ; flabbergasted. (or) works, (+) does not..
-                                         (classlojure.core/invoke-in (.get box-cl) clojure.lang.RT/readString [String])
-                                         (classlojure.core/invoke-in (.get box-cl) clojure.lang.Compiler/eval [Object])
-                                         (classlojure.core/invoke-in (.get box-cl) clojure.lang.RT/printString [Object]))
-                                    (-> (.get box-cl)
-                                        (.loadClass "clojure.lang.Var")
-                                        (.getDeclaredMethod "resetThreadBindingFrame" (into-array Class [Object]))
-                                        (.invoke (.loadClass (.get box-cl) "clojure.lang.Var") (into-array Object [nil])))
-                                    nil))
-                         nil)])
-          (System/gc)
-          (Thread/sleep 5000)
-          ;; (let [box-cl (apply classlojure (map (partial str "file:") classpath))]
-          ;;   (println (eval-in box-cl '*clojure-version*) "- deploy number" i)
-          ;;   (eval-in box-cl '(clojure.core/shutdown-agents))
-          ;;   (System/gc)
-          ;;   (Thread/sleep 1000))
-          ;; (let [box-cl (apply classlojure (map (partial str "file:") classpath))
-          ;;       handler-var-expr (eval-in box-cl '(do (ns webapp)
-          ;;                                             (defn app [req]
-          ;;                                               (assoc req :handled true))))]
-          ;;   (println (eval-in box-cl
-          ;;                     `(fn [~'req] (~handler-var-expr (read-string ~'req)))
-          ;;                     (pr-str {:request-method :get :uri "/"})))
-          ;;   (System/gc)
-          ;;   (Thread/sleep 2000))
-          )))))
+          (let [thread (Thread. (fn [] (let [box-cl (apply classlojure (map (partial str "file:") classpath))]
+                                         (eval-in box-cl
+                                                  '(do
+                                                     (println *clojure-version*)
+                                                     ;; Bind non-dynamic stuff.
+                                                     (ns web)
+                                                     ;; Have a global definition.
+                                                     (defn app [req]
+                                                       (assoc req :handled true))
+                                                     ;; Test futures (using agents).
+                                                     (println (deref (future (app {:request "/"}))))
+                                                     ;; Test transactions.
+                                                     (let [r (ref 35)]
+                                                       (dosync (alter r + 7))
+                                                       (println @r))
+                                                     ;; Shutdown needed.
+                                                     (shutdown-agents))))))]
+            (.start thread)
+            (while (.isAlive thread) (Thread/sleep 200)))
+          (System/gc))))))
 
 
 ;;--- TODO: Make it a library, if possible.
