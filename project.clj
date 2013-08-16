@@ -8,8 +8,10 @@
                  [classlojure "0.6.6"]]
   :jvm-opts ["-XX:+UseConcMarkSweepGC"
              "-XX:+CMSClassUnloadingEnabled"
-             "-XX:MaxPermSize=28m" ; 28
+             "-XX:MaxPermSize=28m"
              ;; "-XX:+TraceClassLoading"
-             "-XX:+HeapDumpOnOutOfMemoryError"
-             "-XX:+TraceClassUnloading"]
+             ;; "-XX:+TraceClassUnloading"
+             ;; "-XX:+HeapDumpOnOutOfMemoryError"
+             ]
+  :java-source-paths ["src-java"]
   :main boxure.core)

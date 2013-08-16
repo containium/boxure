@@ -7,8 +7,10 @@
             [clojure.java.io :refer (as-url)]
             [leiningen.core.project :refer (init-profiles project-with-profiles)]
             [leiningen.core.classpath :refer (resolve-dependencies)]
-            [classlojure.core :refer (classlojure eval-in)])
-  (:import [java.util.jar JarFile]
+            [classlojure.core :refer (classlojure eval-in eval-in*)])
+  (:import [boxure BoxureClassLoader]
+           [java.net URL]
+           [java.util.jar JarFile]
            [clojure.lang RT Compiler DynamicClassLoader])
   (:gen-class))
 
@@ -81,6 +83,21 @@
       (apply str (interpose " => " acc)))))
 
 
+(defn- boxure-loader
+  [parent urls]
+  (let [cl (BoxureClassLoader. (into-array URL (map as-url urls)) parent)]
+    (classlojure.core/with-classloader cl
+      (println (cl-hierarchy-str (.getClassLoader (Class/forName "clojure.lang.RT" true cl))))
+      (println (cl-hierarchy-str (.getContextClassLoader (Thread/currentThread))))
+      #_(.loadClass cl "clojure.lang.RT"))
+    (println (cl-hierarchy-str cl))
+    #_(println (cl-hierarchy-str (classlojure.core/invoke-in cl clojure.lang.RT/baseLoader [])))
+    (classlojure.core/with-classloader cl
+      (println (cl-hierarchy-str (classlojure.core/invoke-in cl clojure.lang.RT/baseLoader []))))
+    #_(eval-in* cl '(require 'clojure.main))
+    cl))
+
+
 (defn- run-box
   [spec-path]
   (let [{:keys [name module-paths config] :as spec}
@@ -94,8 +111,9 @@
                         (.getAbsolutePath dep))]
         (println "Classpath:" classpath)
         (doseq [i (range 100)]
-          (let [thread (Thread. (fn [] (let [box-cl (apply classlojure (map (partial str "file:") classpath))]
-                                         (eval-in box-cl
+          (let [thread (Thread. (fn [] (let [box-cl (boxure-loader (.getClassLoader clojure.lang.RT)
+                                                                   (map (partial str "file:") classpath))]
+                                         #_(eval-in box-cl
                                                   '(do
                                                      (println *clojure-version*)
                                                      ;; Bind non-dynamic stuff.
@@ -113,7 +131,8 @@
                                                      (shutdown-agents))))))]
             (.start thread)
             (while (.isAlive thread) (Thread/sleep 200)))
-          (System/gc))))))
+          (System/gc)
+          (Thread/sleep 4000))))))
 
 
 ;;--- TODO: Make it a library, if possible.
