@@ -10,8 +10,9 @@
             [classlojure.core :refer (classlojure eval-in eval-in*)])
   (:import [boxure BoxureClassLoader]
            [java.net URL]
+           [java.util.concurrent LinkedBlockingQueue TimeUnit]
            [java.util.jar JarFile]
-           [clojure.lang RT Compiler DynamicClassLoader])
+           [clojure.lang DynamicClassLoader])
   (:gen-class))
 
 
@@ -86,16 +87,17 @@
 (defn- boxure-loader
   [parent urls]
   (let [cl (BoxureClassLoader. (into-array URL (map as-url urls)) parent)]
-    (classlojure.core/with-classloader cl
-      (println (cl-hierarchy-str (.getClassLoader (Class/forName "clojure.lang.RT" true cl))))
-      (println (cl-hierarchy-str (.getContextClassLoader (Thread/currentThread))))
-      #_(.loadClass cl "clojure.lang.RT"))
-    (println (cl-hierarchy-str cl))
-    #_(println (cl-hierarchy-str (classlojure.core/invoke-in cl clojure.lang.RT/baseLoader [])))
-    (classlojure.core/with-classloader cl
-      (println (cl-hierarchy-str (classlojure.core/invoke-in cl clojure.lang.RT/baseLoader []))))
-    #_(eval-in* cl '(require 'clojure.main))
+    (.setContextClassLoader (Thread/currentThread) cl)
+    (.loadClass cl "clojure.lang.RT")
+    (eval-in* cl '(require 'clojure.main))
     cl))
+
+
+(defn- eval-in-boxure
+  [box-cl form]
+  (let [bound-form `(clojure.main/with-bindings (eval '~form))]
+    (classlojure.core/with-classloader box-cl
+      (classlojure.core/invoke-in box-cl clojure.lang.Compiler/eval [Object] bound-form))))
 
 
 (defn- run-box
@@ -111,28 +113,49 @@
                         (.getAbsolutePath dep))]
         (println "Classpath:" classpath)
         (doseq [i (range 100)]
-          (let [thread (Thread. (fn [] (let [box-cl (boxure-loader (.getClassLoader clojure.lang.RT)
-                                                                   (map (partial str "file:") classpath))]
-                                         #_(eval-in box-cl
-                                                  '(do
-                                                     (println *clojure-version*)
-                                                     ;; Bind non-dynamic stuff.
-                                                     (ns web)
-                                                     ;; Have a global definition.
-                                                     (defn app [req]
-                                                       (assoc req :handled true))
-                                                     ;; Test futures (using agents).
-                                                     (println (deref (future (app {:request "/"}))))
-                                                     ;; Test transactions.
-                                                     (let [r (ref 35)]
-                                                       (dosync (alter r + 7))
-                                                       (println @r))
-                                                     ;; Shutdown needed.
-                                                     (shutdown-agents))))))]
+          (let [command-q (new LinkedBlockingQueue)
+                thread (Thread. (fn []
+                                  (let [box-cl (boxure-loader (.getClassLoader clojure.lang.RT)
+                                                              (map (partial str "file:") classpath))]
+                                    (loop []
+                                      (println "checking for command on" (Thread/currentThread))
+                                      (if-let [command (.poll command-q 1 TimeUnit/SECONDS)]
+                                        (do (println "received command" command)
+                                            (if-not (= command :stop)
+                                              (let [[form promise] command
+                                                    result (eval-in-boxure box-cl form)]
+                                                (when promise (deliver promise result))
+                                                (recur))
+                                              (println "stopping")))
+                                        (do (println "no command received")
+                                            (recur)))))))]
             (.start thread)
+            (.offer command-q ['(prn *clojure-version*)])
+            (.offer command-q ['(do (require 'clojure.pprint)
+                                    (clojure.pprint/pprint {:foo "bar"}))])
+            (let [answer (promise)]
+              (.offer command-q ['(inc 41) answer])
+              (println "answer =" @answer "  -  type =" (type @answer)))
+            (.offer command-q ['(do (use 'dynapath.util)
+                                    (prn (all-classpath-urls)))])
+            (let [answer (promise)]
+              (.offer command-q ['(defn- cl-hierarchy-str
+                                    [cl]
+                                    (loop [acc [cl]
+                                           parent (.getParent cl)]
+                                      (if parent
+                                        (recur (conj acc parent) (.getParent parent))
+                                        (apply str (interpose " => " acc)))))])
+              (.offer command-q ['(fn [a]
+                                    (prn (inc a))
+                                    (prn (cl-hierarchy-str (.getClassLoader clojure.lang.RT))))
+                                 answer])
+              (prn (type @answer))
+              (@answer 42))
+            (.offer command-q '(shutdown-agents))
+            (.offer command-q :stop)
             (while (.isAlive thread) (Thread/sleep 200)))
-          (System/gc)
-          (Thread/sleep 4000))))))
+          (System/gc))))))
 
 
 ;;--- TODO: Make it a library, if possible.

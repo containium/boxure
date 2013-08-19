@@ -8,7 +8,7 @@
                  [classlojure "0.6.6"]]
   :jvm-opts ["-XX:+UseConcMarkSweepGC"
              "-XX:+CMSClassUnloadingEnabled"
-             "-XX:MaxPermSize=28m"
+             "-XX:MaxPermSize=82m" ; 28m fails within two little leaking apps.
              ;; "-XX:+TraceClassLoading"
              ;; "-XX:+TraceClassUnloading"
              ;; "-XX:+HeapDumpOnOutOfMemoryError"
