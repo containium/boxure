@@ -3,6 +3,7 @@
 ;; file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 (ns boxure.core
+  (:refer-clojure :exclude (eval))
   (:require [clojure.edn :as edn]
             [clojure.java.io :refer (as-url)]
             [leiningen.core.project :refer (init-profiles project-with-profiles)]
@@ -21,15 +22,6 @@
 (defn- error
   [message]
   (throw (AssertionError. message)))
-
-
-(defmacro asserts
-  [test-message-pairs & body]
-  (if-let [[test message] test-message-pairs]
-    `(if-not ~test
-       (error ~message)
-       (asserts ~(next test-message-pairs) ~@body))
-    `(do ~@body)))
 
 
 (defn- resolve-file-path
@@ -52,11 +44,11 @@
     (error (str "Could not find or read JAR file: " jar-path))))
 
 
-(defn- read-project-string
-  [path project-str]
+(defn- read-project-str
+  [project-str path]
   ;; Adapted from leiningen.core.project/read.
   (binding [*ns* (find-ns 'leiningen.core.project)]
-    (try (eval (read-string project-str))
+    (try (clojure.core/eval (read-string project-str))
          (catch Exception e
            (error (str "Could not read project map in '" path "': "
                        (.getMessage e))))))
@@ -68,16 +60,6 @@
 
 
 ;;; Boxure implementation.
-
-(defn- module-spec
-  [path]
-  (let [project (read-project-string path (read-from-jar path "project.clj"))]
-    (let [{{:keys [start stop] :as boxure} :boxure} project]
-      (asserts [boxure (str "Could not find :boxure key in project.clj: " path)
-                start (str "Missing :start in :boxure for: " path)
-                stop (str "Missing :stop in :boxure for: " path)]
-        (assoc boxure :project project)))))
-
 
 (defn- eval-in-boxure
   [box-cl form]
@@ -93,7 +75,7 @@
     (eval-in* box-cl '(require 'clojure.main))
     (println (str "[Boxure " name " ready for commands]"))
     (loop []
-      (if-let [command (.poll command-q 10 TimeUnit/SECONDS)]
+      (if-let [command (.poll command-q 60 TimeUnit/SECONDS)]
         (if-not (= command :stop)
           (let [[form promise] command
                 form-pr (pr-str form)
@@ -114,7 +96,7 @@
 
 ;;; Boxure library API.
 
-(defrecord Boxure [name command-q thread box-cl])
+(defrecord Boxure [name command-q thread box-cl project])
 
 (defn boxure
   "Creat a new box, based on a parent classloader and a path (String)
@@ -134,60 +116,56 @@
   Classes loaded due to the Boxure library do not need to be specified
   in here."
   [options parent-cl jar-path]
-  (let [spec (module-spec jar-path)
+  (let [jar-path (resolve-file-path "." jar-path)
+        project (read-project-str (read-from-jar jar-path "project.clj") jar-path)
         dependencies (when (:resolve-dependencies options)
                        (map #(.getAbsolutePath %)
-                            (resolve-dependencies :dependencies (:project spec))))
+                            (resolve-dependencies :dependencies project)))
         classpath (cons jar-path dependencies)
         command-q (new LinkedBlockingQueue)
         box-cl (BoxureClassLoader. (into-array URL (map (comp as-url (partial str "file:"))
                                                         classpath))
                                    parent-cl
                                    (or (:isolate options) ""))
-        thread (Thread. (boxure-thread-fn box-cl classpath command-q options
-                                          (:name (:project spec))))]
+        thread (Thread. (boxure-thread-fn box-cl classpath command-q options (:name project)))]
     (.start thread)
-    (Boxure. (:name (:project spec)) command-q thread box-cl)))
+    (Boxure. (:name project) command-q thread box-cl project)))
 
 
-(defn boxure-eval
-  "Queue a form to be evaluated in the box, in the box's thread. A
+(defn eval
+  "Queue a form to be evaluated in the box, in the box's thread. At
+  least all of the EDN data sturctures can be send in the form. A
   promise is returned, in which the result of the evaluated form will
-  be delivered. At least all of the EDN data sturctures can be send in
-  the form."
+  be delivered. If an exception was raised during evaluation, it is
+  caught by the box and delivered through the promise as well."
   [box form]
   (let [answer (promise)]
     (.offer (:command-q box) [form answer])
     answer))
 
 
-(defn boxure-eval-and-wait
-  "The same as `boxure-eval`, but wrapped with a blocking deref. I.e.
-  it waits for the evaluation result and returns it derefed."
-  [box form]
-  (deref (boxure-eval box form)))
-
-
-(defn boxure-stop
+(defn stop
   "Queue the stop command to a box, which will close the box's Thread.
   A future is returned, which will be delivered when the thread has
   stopped. Forms queued after the stop command will not be evaluated
   anymore."
   [box]
   (.offer (:command-q box) :stop)
-  (future (while (.isAlive (:thread box))) :stopped))
+  (future (while (.isAlive (:thread box))
+            (Thread/sleep 200))
+          :stopped))
 
 
-(defn boxure-clean-and-stop
+(defn clean-and-stop
   "The same as `boxure-stop`, with some added calls to clean up the
   Clojure runtime inside the box. This prevents memory leaking boxes."
   [box]
-  (boxure-eval box '(shutdown-agents))
-  (boxure-eval box '(clojure.lang.Var/resetThreadBindingFrame nil))
-  (boxure-stop box))
+  (eval box '(shutdown-agents))
+  (eval box '(clojure.lang.Var/resetThreadBindingFrame nil))
+  (stop box))
 
 
-(defn call-in-boxure
+(defn call-in-box
   "Expirimental, as this might cause leaks?"
   [box f & args]
   (with-classloader (:box-cl box)
