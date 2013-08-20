@@ -62,10 +62,12 @@ public class BoxureClassLoader extends URLClassLoader {
 
 
   private ClassLoader parent = null;
+  private String userIsolate = null;
 
-  public BoxureClassLoader(final URL[] urls, final ClassLoader parent) {
+  public BoxureClassLoader(final URL[] urls, final ClassLoader parent, final String userIsolate) {
     super(urls, parent);
     this.parent = parent;
+    this.userIsolate = userIsolate;
   }
 
 
@@ -85,7 +87,7 @@ public class BoxureClassLoader extends URLClassLoader {
     final Class<?> clazz = super.findLoadedClass(name);
     if (clazz != null) return clazz;
 
-    if (name.matches(ISOLATE)) {
+    if (name.matches(ISOLATE) || name.matches(userIsolate)) {
       log("[Boxure loading class "+ name +" in isolation]");
       return super.findClass(name);
     } else {
