@@ -13,5 +13,4 @@
              ;; "-XX:+TraceClassUnloading"
              ;; "-XX:+HeapDumpOnOutOfMemoryError"
              ]
-  :java-source-paths ["src-java"]
-  :main boxure.core)
+  :java-source-paths ["src-java"])

@@ -7,5 +7,11 @@
             [boxure.core :refer :all]))
 
 (deftest a-test
-  (testing "FIXME, I fail."
-    (is (= 0 1))))
+  (testing "Leaking"
+    (doseq [i (range 10)]
+      (println "Starting and stopping box nr" (inc i))
+      (boxure-stop (boxure {:resolve-dependencies true}
+                           (.getClassLoader clojure.lang.RT)
+                           "dev-resources/modules/module.jar"))
+      (System/gc)
+      (Thread/sleep 1000))))
