@@ -117,6 +117,22 @@
 (defrecord Boxure [name command-q thread box-cl])
 
 (defn boxure
+  "Creat a new box, based on a parent classloader and a path (String)
+  to the JAR one wants to load. The path may be relative to the
+  current working directory. The JAR must contain a project.clj.
+
+  One can also supply an options map. The following options are
+  available:
+
+  :resolve-dependencies - When truthful, the dependencies as specified
+  in the project.clj of the JAR are resolved and added to the
+  classpath of the box.
+
+  :isolate - A regular expression (String) matching class names that
+  should be loaded in isolation in the box. Note that all Clojure code
+  that was loaded in the parent classloader should be isolated!
+  Classes loaded due to the Boxure library do not need to be specified
+  in here."
   [options parent-cl jar-path]
   (let [spec (module-spec jar-path)
         dependencies (when (:resolve-dependencies options)
@@ -135,6 +151,10 @@
 
 
 (defn boxure-eval
+  "Queue a form to be evaluated in the box, in the box's thread. A
+  promise is returned, in which the result of the evaluated form will
+  be delivered. At least all of the EDN data sturctures can be send in
+  the form."
   [box form]
   (let [answer (promise)]
     (.offer (:command-q box) [form answer])
@@ -142,17 +162,33 @@
 
 
 (defn boxure-eval-and-wait
+  "The same as `boxure-eval`, but wrapped with a blocking deref. I.e.
+  it waits for the evaluation result and returns it derefed."
   [box form]
   (deref (boxure-eval box form)))
 
 
 (defn boxure-stop
+  "Queue the stop command to a box, which will close the box's Thread.
+  A future is returned, which will be delivered when the thread has
+  stopped. Forms queued after the stop command will not be evaluated
+  anymore."
   [box]
   (.offer (:command-q box) :stop)
   (future (while (.isAlive (:thread box))) :stopped))
 
 
+(defn boxure-clean-and-stop
+  "The same as `boxure-stop`, with some added calls to clean up the
+  Clojure runtime inside the box. This prevents memory leaking boxes."
+  [box]
+  (boxure-eval box '(shutdown-agents))
+  (boxure-eval box '(clojure.lang.Var/resetThreadBindingFrame nil))
+  (boxure-stop box))
+
+
 (defn call-in-boxure
+  "Expirimental, as this might cause leaks?"
   [box f & args]
   (with-classloader (:box-cl box)
     (apply f args)))
