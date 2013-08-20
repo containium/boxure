@@ -157,8 +157,8 @@
 
 
 (defn clean-and-stop
-  "The same as `boxure-stop`, with some added calls to clean up the
-  Clojure runtime inside the box. This prevents memory leaking boxes."
+  "The same as `stop`, with some added calls to clean up the Clojure
+  runtime inside the box. This prevents memory leaking boxes."
   [box]
   (eval box '(shutdown-agents))
   (eval box '(clojure.lang.Var/resetThreadBindingFrame nil))
