@@ -63,7 +63,7 @@
 
 (defn- eval-in-boxure
   [box-cl form]
-  (let [bound-form `(clojure.main/with-bindings (eval '~form))]
+  (let [bound-form `(clojure.main/with-bindings (clojure.core/eval '~form))]
     (with-classloader box-cl
       (invoke-in box-cl clojure.lang.Compiler/eval [Object] bound-form))))
 
