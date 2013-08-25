@@ -50,6 +50,7 @@ public class BoxureClassLoader extends URLClassLoader {
     + "|clojure\\.edn.*"
     + "|clojure\\.walk.*"
     + "|clojure\\.set.*"
+    + "|clojure\\.tools.*"
     + "|boxure\\.core.*"
     + "|leiningen\\.core.*"
     + "|cemerick\\.pomegranate.*"
