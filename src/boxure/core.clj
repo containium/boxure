@@ -112,9 +112,11 @@
 
   :isolate - A regular expression (String) matching class names that
   should be loaded in isolation in the box. Note that all Clojure code
-  that was loaded in the parent classloader should be isolated!
-  Classes loaded due to the Boxure library do not need to be specified
-  in here."
+  that was loaded in the parent classloader should be isolated! For
+  example, if `clojure.pprint` was loaded in the application, one
+  would have an isolate String like \"clojure\\.pprint.*\". Classes
+  loaded due to the Boxure library do not need to be specified in
+  here."
   [options parent-cl jar-path]
   (let [jar-path (resolve-file-path "." jar-path)
         project (read-project-str (read-from-jar jar-path "project.clj") jar-path)
