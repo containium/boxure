@@ -10,7 +10,7 @@
 
 (deftest a-test
   (testing "Leaking"
-    (doseq [i (range 100)]
+    (doseq [i (range 10)]
       (println "Starting, testing and stopping box nr" (inc i))
       (let [box (boxure {:resolve-dependencies true}
                         (.getClassLoader clojure.lang.RT)

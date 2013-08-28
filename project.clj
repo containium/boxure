@@ -12,6 +12,6 @@
              "-XX:MaxPermSize=35m"
              ;; "-XX:+TraceClassLoading"
              ;; "-XX:+TraceClassUnloading"
-             "-XX:+HeapDumpOnOutOfMemoryError"
+             ;; "-XX:+HeapDumpOnOutOfMemoryError"
              ]
   :java-source-paths ["src-java"])
