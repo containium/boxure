@@ -134,7 +134,8 @@
                                                         classpath))
                                    parent-cl
                                    (or (:isolate options) ""))
-        thread (Thread. (boxure-thread-fn box-cl classpath command-q options (:name project)))]
+        thread (Thread. (boxure-thread-fn box-cl classpath command-q options (:name project))
+                        (str (:name project) "box"))]
     (.start thread)
     (Boxure. (:name project) command-q thread box-cl project)))
 
