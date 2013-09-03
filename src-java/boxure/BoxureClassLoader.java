@@ -91,8 +91,14 @@ public class BoxureClassLoader extends URLClassLoader {
     if (clazz != null) return clazz;
 
     if (name.matches(ISOLATE) || name.matches(userIsolate)) {
-      log("[Boxure loading class "+ name +" in isolation]");
-      return super.findClass(name);
+      try {
+        final Class<?> isoClazz = super.findClass(name);
+        log("[Boxure loading class "+ name +" in isolation]");
+        return isoClazz;
+      } catch (ClassNotFoundException cnfe) {
+        log("[Boxure could not load class "+ name +" in isolation]");
+        throw cnfe;
+      }
     } else {
       final Class<?> parentClazz = findLoadedClassParent(name);
       if (parentClazz != null) {
@@ -103,8 +109,15 @@ public class BoxureClassLoader extends URLClassLoader {
           log("[Boxure loads class "+ name +" itself, as direct parent had not loaded it]");
           return loadedOurself;
         } catch (ClassNotFoundException cnfe) {
-          log("[Boxure tries normal class loading for "+ name +", as it cannot find it itself]");
-          return super.loadClass(name, resolve);
+          try {
+            final Class<?> superClazz = super.loadClass(name, resolve);
+            log("[Boxure could not find class "+ name +
+                "itself, thus loaded it by normal classloading.]");
+            return superClazz;
+          } catch (ClassNotFoundException cnfe2) {
+            log("[Boxure could not find class "+ name +" itself, nor by normal classloading]");
+            throw cnfe2;
+          }
         }
     }
   }
