@@ -36,6 +36,7 @@ public class BoxureClassLoader extends URLClassLoader {
     + "|clojure\\.lang\\.Var.*"                // Uses Namespace, which needs isolation.
     + "|clojure\\.lang\\.Agent.*"              // We require a threadpool per Clojure instance.
     + "|clojure\\.lang\\.DynamicClassLoader.*" // We require a class cache per Clojure instance.
+    + "|clojure\\.lang\\.LispReader.*"         // Uses Compiler in SyntaxQuoteReader.syntaxQuote(..)
 
     // All Clojure functions that are loaded by Boxure need to be redefined,
     // such that they use the isolated classes.
@@ -51,6 +52,7 @@ public class BoxureClassLoader extends URLClassLoader {
     + "|clojure\\.walk.*"
     + "|clojure\\.set.*"
     + "|clojure\\.tools.*"
+    + "|clojure\\.data.*"
     + "|boxure\\.core.*"
     + "|leiningen\\.core.*"
     + "|cemerick\\.pomegranate.*"
