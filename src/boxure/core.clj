@@ -36,13 +36,17 @@
     (.getPath (.relativize pwd-uri (.resolve root-uri path)))))
 
 
-(defn- read-from-jar [jar-path inner-path]
-  (if-let [jar (try (JarFile. jar-path) (catch Exception ex))]
-    (if-let [entry (.getJarEntry jar inner-path)]
-      (with-open [is (.getInputStream jar entry)]
-        (slurp is))
-      (error (str "Could not find file '" inner-path "' in: " jar-path)))
-    (error (str "Could not find or read JAR file: " jar-path))))
+(defn- read-from-jar
+  "Reads a jar file entry contents into a String."
+  [jar-path inner-path]
+  (try
+    (with-open [jar (JarFile. jar-path)]
+      (if-let [entry (.getJarEntry jar inner-path)]
+        (slurp (.getInputStream jar entry))
+        (error (str "Could not find file '" inner-path "' in: " jar-path))))
+    (catch Exception ex
+      (error (str "Could not find or read JAR file: " jar-path
+                  "\nReason: " ex)))))
 
 
 (defn- read-project-str
