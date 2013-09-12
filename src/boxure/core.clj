@@ -24,49 +24,36 @@
   (throw (AssertionError. message)))
 
 
-(defn- resolve-file-path
-  "Given a root file name and a path, this function returns the path to
-  the file, as resolved from the specified root. If the resulting path
-  is at or deeper than the current working directory, that relative path is
-  returned. Otherwise, an absolute path is returned."
-  ;; Adapted from aroemers/gluer.main.
-  [root path]
-  (let [root-uri (.toURI (java.io.File. root))
-        pwd-uri (.toURI (java.io.File. "."))]
-    (.getPath (.relativize pwd-uri (.resolve root-uri path)))))
-
-
 (defn- read-from-jar
   "Reads a jar file entry contents into a String."
-  [jar-path inner-path]
+  [file inner-path]
   (try
-    (with-open [jar (JarFile. jar-path)]
+    (with-open [jar (JarFile. file)]
       (if-let [entry (.getJarEntry jar inner-path)]
         (slurp (.getInputStream jar entry))
-        (error (str "Could not find file '" inner-path "' in: " jar-path))))
+        (error (str "Could not find file '" inner-path "' in: " file))))
     (catch Exception ex
-      (error (str "Could not find or read JAR file: " jar-path
-                  "\nReason: " ex)))))
+      (error (str "Could not find or read JAR file: " file "\nReason: " ex)))))
 
 
 (defn- read-project-str
-  [project-str path]
+  [project-str file]
   ;; Adapted from leiningen.core.project/read.
   (binding [*ns* (find-ns 'leiningen.core.project)]
     (try (clojure.core/eval (read-string project-str))
          (catch Exception e
-           (error (str "Could not read project map in '" path "': "
+           (error (str "Could not read project map in '" file "': "
                        (.getMessage e))))))
   (let [project (resolve 'leiningen.core.project/project)]
     (when-not project
-      (error (str "The project.clj must define a project map in: " path)))
+      (error (str "The project.clj must define a project map in: " file)))
     (ns-unmap 'leiningen.core.project 'project)
     (init-profiles (project-with-profiles @project) [:default])))
 
 
 (defn jar-project
-  [path]
-  (read-project-str (read-from-jar path "project.clj") path))
+  [file]
+  (read-project-str (read-from-jar file "project.clj") file))
 
 
 ;;; Boxure implementation.
@@ -107,9 +94,8 @@
 (defrecord Boxure [name command-q thread box-cl project])
 
 (defn boxure
-  "Creat a new box, based on a parent classloader and a path (String)
-  to the JAR one wants to load. The path may be relative to the
-  current working directory. The JAR must contain a project.clj.
+  "Creat a new box, based on a parent classloader and a File to the
+  JAR one wants to load. The JAR must contain a project.clj.
 
   One can also supply an options map. The following options are
   available:
@@ -125,13 +111,12 @@
   would have an isolate String like \"clojure\\.pprint.*\". Classes
   loaded due to the Boxure library do not need to be specified in
   here."
-  [options parent-cl jar-path]
-  (let [jar-path (resolve-file-path "." jar-path)
-        project (jar-project jar-path)
+  [options parent-cl file]
+  (let [project (jar-project file)
         dependencies (when (:resolve-dependencies options)
                        (map #(.getAbsolutePath %)
                             (resolve-dependencies :dependencies project)))
-        classpath (cons jar-path dependencies)
+        classpath (cons (.getAbsolutePath file) dependencies)
         command-q (new LinkedBlockingQueue)
         box-cl (BoxureClassLoader. (into-array URL (map (comp as-url (partial str "file:"))
                                                         classpath))

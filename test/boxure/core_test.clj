@@ -5,6 +5,7 @@
 (ns boxure.core-test
   (:refer-clojure :exclude (eval))
   (:require [clojure.test :refer :all]
+            [clojure.java.io :refer (file)]
             [boxure.core :refer :all])
   (:import [java.lang.ref WeakReference]))
 
@@ -14,7 +15,7 @@
       (println "Starting, testing and stopping box nr" (inc i))
       (let [box (boxure {:resolve-dependencies true}
                         (.getClassLoader clojure.lang.RT)
-                        "dev-resources/modules/module.jar")]
+                        (file "dev-resources/modules/module.jar"))]
         ;; Simple test.
         (eval box '(prn *ns*))
 
