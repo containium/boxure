@@ -104,13 +104,13 @@
   in the project.clj of the JAR are resolved and added to the
   classpath of the box.
 
-  :isolate - A regular expression (String) matching class names that
-  should be loaded in isolation in the box. Note that all Clojure code
-  that was loaded in the parent classloader should be isolated! For
-  example, if `clojure.pprint` was loaded in the application, one
-  would have an isolate String like \"clojure\\.pprint.*\". Classes
-  loaded due to the Boxure library do not need to be specified in
-  here."
+  :isolates - A sequence of regular expression (String) matching class
+  names that should be loaded in isolation in the box. Note that all
+  Clojure code that was loaded in the parent classloader should be
+  isolated! For example, if `clojure.pprint` was loaded in the
+  application, one would have an isolates sequence like
+  [\"clojure\\.pprint.*\"]. Classes loaded due to the Boxure library
+  do not need to be specified in here."
   [options parent-cl file]
   (let [project (jar-project file)
         dependencies (when (:resolve-dependencies options)
@@ -121,7 +121,7 @@
         box-cl (BoxureClassLoader. (into-array URL (map (comp as-url (partial str "file:"))
                                                         classpath))
                                    parent-cl
-                                   (or (:isolate options) ""))
+                                   (apply str (interpose "|" (:isolates options))))
         thread (Thread. (boxure-thread-fn box-cl classpath command-q options (:name project))
                         (str (:name project) "box"))]
     (.start thread)
