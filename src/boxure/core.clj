@@ -65,18 +65,24 @@
       (invoke-in box-cl clojure.lang.Compiler/eval [Object] bound-form))))
 
 
+(defn- log
+  [options message]
+  (when (:debug? options)
+    (println message)))
+
+
 (defn- boxure-thread-fn
   [box-cl classpath command-q options name]
   (fn []
     (.loadClass box-cl "clojure.lang.RT")
     (eval-in* box-cl '(require 'clojure.main))
-    (println (str "[Boxure " name " ready for commands]"))
+    (log options (str "[Boxure " name " ready for commands]"))
     (loop []
       (if-let [command (.poll command-q 60 TimeUnit/SECONDS)]
         (if-not (= command :stop)
           (let [[form promise] command
                 form-pr (pr-str form)
-                _ (println (str "[Boxure " name " received evaluation command: "
+                _ (log options (str "[Boxure " name " received evaluation command: "
                                 (if (> (count form-pr) 30)
                                   (str (subs (pr-str form) 0 30) "...")
                                   form-pr)
@@ -85,7 +91,7 @@
                             (catch Exception e e))]
             (when promise (deliver promise result))
             (recur))
-          (println (str "[Boxure " name " received stop command]")))
+          (log options (str "[Boxure " name " received stop command]")))
         (recur)))))
 
 
@@ -102,7 +108,7 @@
 
   :resolve-dependencies - When truthful, the dependencies as specified
   in the project.clj of the JAR are resolved and added to the
-  classpath of the box.
+  classpath of the box. Defaults to false.
 
   :isolates - A sequence of regular expression (String) matching class
   names that should be loaded in isolation in the box. Note that all
@@ -110,7 +116,10 @@
   isolated! For example, if `clojure.pprint` was loaded in the
   application, one would have an isolates sequence like
   [\"clojure\\.pprint.*\"]. Classes loaded due to the Boxure library
-  do not need to be specified in here."
+  do not need to be specified in here. Defaults to an emply sequence.
+
+  :debug? - A boolean indicating whether to print debug messages.
+  Defaults to false."
   [options parent-cl file]
   (let [project (jar-project file)
         dependencies (when (:resolve-dependencies options)
@@ -121,7 +130,8 @@
         box-cl (BoxureClassLoader. (into-array URL (map (comp as-url (partial str "file:"))
                                                         classpath))
                                    parent-cl
-                                   (apply str (interpose "|" (:isolates options))))
+                                   (apply str (interpose "|" (:isolates options)))
+                                   (boolean (:debug? options)))
         thread (Thread. (boxure-thread-fn box-cl classpath command-q options (:name project))
                         (str (:name project) "box"))]
     (.start thread)

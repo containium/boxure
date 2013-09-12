@@ -26,9 +26,6 @@ public class BoxureClassLoader extends URLClassLoader {
   }
 
 
-  private static boolean logging = false;
-
-
   private final static String ISOLATE =
        "clojure\\.lang\\.RT.*"                 // Uses Compiler and Namespace, which need isolation.
     + "|clojure\\.lang\\.Compiler.*"
@@ -66,11 +63,14 @@ public class BoxureClassLoader extends URLClassLoader {
 
   private ClassLoader parent = null;
   private String userIsolate = null;
+  private boolean logging = false;
 
-  public BoxureClassLoader(final URL[] urls, final ClassLoader parent, final String userIsolate) {
+  public BoxureClassLoader(final URL[] urls, final ClassLoader parent, final String userIsolate,
+                           final boolean logging) {
     super(urls, parent);
     this.parent = parent;
     this.userIsolate = userIsolate;
+    this.logging = logging;
   }
 
 

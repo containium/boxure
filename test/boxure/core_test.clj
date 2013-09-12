@@ -13,7 +13,8 @@
   (testing "Leaking"
     (doseq [i (range 10)]
       (println "Starting, testing and stopping box nr" (inc i))
-      (let [box (boxure {:resolve-dependencies true}
+      (let [box (boxure {:resolve-dependencies true
+                         :debug? false}
                         (.getClassLoader clojure.lang.RT)
                         (file "dev-resources/modules/module.jar"))]
         ;; Simple test.
