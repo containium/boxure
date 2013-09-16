@@ -15,3 +15,5 @@
              ;; "-XX:+HeapDumpOnOutOfMemoryError"
              ]
   :java-source-paths ["src-java"])
+
+;;; Sync changes to this file with pom.xml.
