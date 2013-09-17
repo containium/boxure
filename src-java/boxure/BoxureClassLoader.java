@@ -53,6 +53,7 @@ public class BoxureClassLoader extends URLClassLoader {
     + "|clojure\\.test.*"
     + "|clojure\\.template.*"
     + "|clojure\\.stacktrace.*"
+    + "|clojure\\.pprint.*"
     + "|boxure\\.core.*"
     + "|leiningen\\.core.*"
     + "|cemerick\\.pomegranate.*"
