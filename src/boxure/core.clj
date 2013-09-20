@@ -38,7 +38,7 @@
 
 
 (defn- read-project-str
-  [project-str file]
+  [project-str file profiles]
   ;; Adapted from leiningen.core.project/read.
   (binding [*ns* (find-ns 'leiningen.core.project)]
     (try (clojure.core/eval (read-string project-str))
@@ -49,29 +49,32 @@
     (when-not project
       (error (str "The project.clj must define a project map in: " file)))
     (ns-unmap 'leiningen.core.project 'project)
-    (init-profiles (project-with-profiles @project) [:default])))
+    (init-profiles (project-with-profiles @project) profiles)))
 
 
 (defn- jar-project
   "Returns the project.clj map from a JAR file."
-  [file]
-  (read-project-str (read-from-jar file "project.clj") file))
+  [file profiles]
+  (read-project-str (read-from-jar file "project.clj") file profiles))
 
 
 (defn- dir-project
   "Returns the project.clj map from a directory."
-  [^File dir]
+  [^File dir profiles]
   (let [project-file (file dir "project.clj")]
-    (read-project-str (slurp project-file) project-file)))
+    (read-project-str (slurp project-file) project-file profiles)))
 
 
 (defn file-project
   "Returns the project.clj map from the specified file. The file may
-  point to a JAR file or to a directory."
-  [^File file]
-  (if (.isDirectory file)
-    (dir-project file)
-    (jar-project file)))
+  point to a JAR file or to a directory. One can specify a vector of
+  profiles to apply, which defaults to [:default]."
+  ([^File file]
+     (file-project file [:default]))
+  ([^File file profiles]
+     (if (.isDirectory file)
+       (dir-project file profiles)
+       (jar-project file profiles))))
 
 
 (defn- file-classpath
@@ -157,9 +160,12 @@
   do not need to be specified in here. Defaults to an emply sequence.
 
   :debug? - A boolean indicating whether to print debug messages.
-  Defaults to false."
+  Defaults to false.
+
+  :profiles - A vector of profile keywords, which is used when reading
+  the project map from the project.clj file. Defaults to [:default]."
   [options parent-cl file]
-  (let [project (file-project file)
+  (let [project (file-project file (or (:profiles options) [:default]))
         dependencies (when (:resolve-dependencies options)
                        (map #(.getAbsolutePath ^File %)
                             (resolve-dependencies :dependencies project)))
