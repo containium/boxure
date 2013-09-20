@@ -80,8 +80,12 @@
   [^File file project]
   (if (.isDirectory file)
     (let [bad-root (:root project)
+          _ (prn project)
           good-root (.getAbsolutePath file)
-          replace-root (fn [path] (str good-root (subs path (count bad-root)) "/"))]
+          ensure-prefix (fn [prefix string]
+                          (if (.startsWith string prefix) string (str prefix string)))
+          replace-root (fn [path]
+                         (str good-root (ensure-prefix "/" (subs path (count bad-root))) "/"))]
       (concat (map replace-root (:source-paths project))
               (map replace-root (:resource-paths project))
               [(replace-root (:compile-path project))]))
@@ -162,6 +166,9 @@
                             (resolve-dependencies :dependencies project)))
         classpath (concat (file-classpath file project) dependencies)
         urls (into-array URL (map (comp as-url (partial str "file:")) classpath))
+        _ (when (:debug? options)
+            (println "Classpath URLs for box:")
+            (doseq [url urls] (print url)))
         command-q (new LinkedBlockingQueue)
         box-cl (BoxureClassLoader. urls parent-cl
                                    (apply str (interpose "|" (:isolates options)))
