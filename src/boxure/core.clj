@@ -5,11 +5,12 @@
 (ns boxure.core
   (:refer-clojure :exclude (eval))
   (:require [clojure.edn :as edn]
-            [clojure.java.io :refer (as-url)]
+            [clojure.java.io :refer (as-url file)]
             [leiningen.core.project :refer (init-profiles project-with-profiles)]
             [leiningen.core.classpath :refer (resolve-dependencies)]
             [classlojure.core :refer (invoke-in with-classloader eval-in*)])
   (:import [boxure BoxureClassLoader]
+           [java.io File]
            [java.net URL]
            [java.util.concurrent LinkedBlockingQueue TimeUnit]
            [java.util.jar JarFile]
@@ -26,7 +27,7 @@
 
 (defn- read-from-jar
   "Reads a jar file entry contents into a String."
-  [file inner-path]
+  [^File file inner-path]
   (try
     (with-open [jar (JarFile. file)]
       (if-let [entry (.getJarEntry jar inner-path)]
@@ -51,9 +52,40 @@
     (init-profiles (project-with-profiles @project) [:default])))
 
 
-(defn jar-project
+(defn- jar-project
+  "Returns the project.clj map from a JAR file."
   [file]
   (read-project-str (read-from-jar file "project.clj") file))
+
+
+(defn- dir-project
+  "Returns the project.clj map from a directory."
+  [^File dir]
+  (let [project-file (file dir "project.clj")]
+    (read-project-str (slurp project-file) project-file)))
+
+
+(defn file-project
+  "Returns the project.clj map from the specified file. The file may
+  point to a JAR file or to a directory."
+  [^File file]
+  (if (.isDirectory file)
+    (dir-project file)
+    (jar-project file)))
+
+
+(defn- file-classpath
+  "Given a file and the project.clj map, returns the classpath entries
+  for this file. The file may point to a directory or a JAR file."
+  [^File file project]
+  (if (.isDirectory file)
+    (let [bad-root (:root project)
+          good-root (.getAbsolutePath file)
+          replace-root (fn [path] (str good-root (subs path (count bad-root)) "/"))]
+      (concat (map replace-root (:source-paths project))
+              (map replace-root (:resource-paths project))
+              [(replace-root (:compile-path project))]))
+    (.getAbsolutePath file)))
 
 
 ;;; Boxure implementation.
@@ -72,7 +104,7 @@
 
 
 (defn- boxure-thread-fn
-  [box-cl classpath command-q options name]
+  [^BoxureClassLoader box-cl classpath ^LinkedBlockingQueue command-q options name]
   (fn []
     (.loadClass box-cl "clojure.lang.RT")
     (eval-in* box-cl '(require 'clojure.main))
@@ -101,14 +133,17 @@
 
 (defn boxure
   "Creat a new box, based on a parent classloader and a File to the
-  JAR one wants to load. The JAR must contain a project.clj.
+  JAR or directory one wants to load. The JAR or directory must
+  contain a project.clj. Whenever a directory is loaded, the
+  :source-paths, :resource-paths and :compile-path from the project
+  map are added to the classpath of the box, in that order.
 
   One can also supply an options map. The following options are
   available:
 
   :resolve-dependencies - When truthful, the dependencies as specified
-  in the project.clj of the JAR are resolved and added to the
-  classpath of the box. Defaults to false.
+  in the project.clj are resolved and added to the classpath of the
+  box. Defaults to false.
 
   :isolates - A sequence of regular expression (String) matching class
   names that should be loaded in isolation in the box. Note that all
@@ -121,19 +156,19 @@
   :debug? - A boolean indicating whether to print debug messages.
   Defaults to false."
   [options parent-cl file]
-  (let [project (jar-project file)
+  (let [project (file-project file)
         dependencies (when (:resolve-dependencies options)
-                       (map #(.getAbsolutePath %)
+                       (map #(.getAbsolutePath ^File %)
                             (resolve-dependencies :dependencies project)))
-        classpath (cons (.getAbsolutePath file) dependencies)
+        classpath (concat (file-classpath file project) dependencies)
+        urls (into-array URL (map (comp as-url (partial str "file:")) classpath))
         command-q (new LinkedBlockingQueue)
-        box-cl (BoxureClassLoader. (into-array URL (map (comp as-url (partial str "file:"))
-                                                        classpath))
-                                   parent-cl
+        box-cl (BoxureClassLoader. urls parent-cl
                                    (apply str (interpose "|" (:isolates options)))
                                    (boolean (:debug? options)))
-        thread (Thread. (boxure-thread-fn box-cl classpath command-q options (:name project))
-                        (str (:name project) "box"))]
+        thread (Thread. ^Runnable (boxure-thread-fn box-cl classpath command-q options
+                                                    (:name project))
+                        (str (:name project) "-BOX"))]
     (.start thread)
     (Boxure. (:name project) command-q thread box-cl project)))
 
@@ -146,7 +181,7 @@
   caught by the box and delivered through the promise as well."
   [box form]
   (let [answer (promise)]
-    (.offer (:command-q box) [form answer])
+    (.offer ^LinkedBlockingQueue (:command-q box) [form answer])
     answer))
 
 
@@ -156,8 +191,8 @@
   stopped. Forms queued after the stop command will not be evaluated
   anymore."
   [box]
-  (.offer (:command-q box) :stop)
-  (future (while (.isAlive (:thread box))
+  (.offer ^LinkedBlockingQueue (:command-q box) :stop)
+  (future (while (.isAlive ^Thread (:thread box))
             (Thread/sleep 200))
           :stopped))
 
