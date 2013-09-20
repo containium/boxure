@@ -80,7 +80,6 @@
   [^File file project]
   (if (.isDirectory file)
     (let [bad-root (:root project)
-          _ (prn project)
           good-root (.getAbsolutePath file)
           ensure-prefix (fn [prefix string]
                           (if (.startsWith string prefix) string (str prefix string)))
