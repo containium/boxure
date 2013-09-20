@@ -81,7 +81,7 @@
   (if (.isDirectory file)
     (let [bad-root (:root project)
           good-root (.getAbsolutePath file)
-          ensure-prefix (fn [prefix string]
+          ensure-prefix (fn [prefix ^String string]
                           (if (.startsWith string prefix) string (str prefix string)))
           replace-root (fn [path]
                          (str good-root (ensure-prefix "/" (subs path (count bad-root))) "/"))]
