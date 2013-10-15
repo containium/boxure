@@ -76,6 +76,8 @@
        (dir-project file profiles)
        (jar-project file profiles))))
 
+(defn ensure-prefix [prefix ^String string]
+  (if (.startsWith string prefix) string (str prefix string)))
 
 (defn- file-classpath
   "Given a file and the project.clj map, returns the classpath entries
@@ -84,13 +86,12 @@
   (if (.isDirectory file)
     (let [bad-root (:root project)
           good-root (.getAbsolutePath file)
-          ensure-prefix (fn [prefix ^String string]
-                          (if (.startsWith string prefix) string (str prefix string)))
           replace-root (fn [path]
                          (str good-root (ensure-prefix "/" (subs path (count bad-root))) "/"))]
       (concat (map replace-root (:source-paths project))
               (map replace-root (:resource-paths project))
-              [(replace-root (:compile-path project))]))
+              [(replace-root (:compile-path project))]
+              (map #(.getAbsolutePath ^File %) (.listFiles (File. (str good-root "/lib"))))))
     (.getAbsolutePath file)))
 
 
