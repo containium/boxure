@@ -127,7 +127,7 @@
                                   form-pr)
                                 "]"))
                 result (try (eval-in-boxure box-cl form)
-                            (catch Exception e e))]
+                            (catch Throwable e e))]
             (when promise (deliver promise result))
             (recur))
           (log options (str "[Boxure " name " received stop command]")))
@@ -190,8 +190,9 @@
   "Queue a form to be evaluated in the box, in the box's thread. At
   least all of the EDN data sturctures can be send in the form. A
   promise is returned, in which the result of the evaluated form will
-  be delivered. If an exception was raised during evaluation, it is
-  caught by the box and delivered through the promise as well."
+  be delivered. If a Throwable was raised during evaluation, it is
+  caught by the box and delivered through the promise as well. If an
+  Error was raised, it may be best to kill the box."
   [box form]
   (let [answer (promise)]
     (.offer ^LinkedBlockingQueue (:command-q box) [form answer])
