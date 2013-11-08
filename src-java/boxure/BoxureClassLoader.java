@@ -13,19 +13,6 @@ import java.util.regex.Pattern;
 public class BoxureClassLoader extends URLClassLoader {
 
 
-  // Reflection magic, needed to call findLoadedClass on parent.
-  private static Method flcMethod = null;
-
-  static {
-    try {
-      flcMethod = ClassLoader.class.getDeclaredMethod("findLoadedClass", String.class);
-      flcMethod.setAccessible(true);
-    } catch (final NoSuchMethodException nsme) {
-      nsme.printStackTrace();
-    }
-  }
-
-
   private final static String ISOLATE =
        "clojure\\.lang\\.RT.*"                 // Uses Compiler and Namespace, which need isolation.
     + "|clojure\\.lang\\.Compiler.*"
@@ -80,12 +67,9 @@ public class BoxureClassLoader extends URLClassLoader {
   /**
    * Process:
    * 1. Check if it is already loaded by this classloader, if so return it.
-   * 2. Check if the class needs to be loaded in isolation for sure. If so, try
+   * 2. Check if the class needs to be loaded in isolation. If so, try
    *    to load the class here, or fail.
-   * 3. Check if the parent classloader (the standard Application ClassLoader)
-   *    has already loaded it. If so, use that one.
-   * 4. Try to find the class in here. If it succeeds, use that one.
-   * 5. Try to load the class in the normal way.
+   * 3. Try to load the class in the normal way (parent first).
    */
   protected Class<?> loadClass(final String name, final boolean resolve)
     throws ClassNotFoundException {
@@ -103,39 +87,15 @@ public class BoxureClassLoader extends URLClassLoader {
         throw cnfe;
       }
     } else {
-      final Class<?> parentClazz = findLoadedClassParent(name);
-      if (parentClazz != null) {
-        log("[Boxure uses already loaded class in parent "+ name +"]");
-        return parentClazz;
-      } else try {
-          final Class<?> loadedOurself = super.findClass(name);
-          log("[Boxure loads class "+ name +" itself, as direct parent had not loaded it]");
-          return loadedOurself;
-        } catch (ClassNotFoundException cnfe) {
-          try {
-            final Class<?> superClazz = super.loadClass(name, resolve);
-            log("[Boxure could not find class "+ name +
-                "itself, thus loaded it by normal classloading.]");
-            return superClazz;
-          } catch (ClassNotFoundException cnfe2) {
-            log("[Boxure could not find class "+ name +" itself, nor by normal classloading]");
-            throw cnfe2;
-          }
-        }
+      try {
+        final Class<?> superClazz = super.loadClass(name, resolve);
+        log("[Boxure loading class "+ name +" by normal classloading.]");
+        return superClazz;
+      } catch (ClassNotFoundException cnfe2) {
+        log("[Boxure could not load "+ name +" by normal classloading]");
+        throw cnfe2;
+      }
     }
-  }
-
-
-  private Class<?> findLoadedClassParent(final String name) {
-    try {
-      final Object result = flcMethod.invoke(parent, name);
-      if (result != null) return (Class<?>) result;
-    } catch (final IllegalAccessException iae) {
-      iae.printStackTrace();
-    } catch (final InvocationTargetException ite) {
-      ite.printStackTrace();
-    }
-    return null;
   }
 
 
