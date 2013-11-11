@@ -40,16 +40,17 @@
 (defn- read-project-str
   [project-str file profiles]
   ;; Adapted from leiningen.core.project/read.
-  (binding [*ns* (find-ns 'leiningen.core.project)]
-    (try (clojure.core/eval (read-string project-str))
-         (catch Exception e
-           (error (str "Could not read project map in '" file "': "
-                       (.getMessage e))))))
-  (let [project (resolve 'leiningen.core.project/project)]
-    (when-not project
-      (error (str "The project.clj must define a project map in: " file)))
-    (ns-unmap 'leiningen.core.project 'project)
-    (init-profiles (project-with-profiles @project) profiles)))
+  (locking (var read-project-str)
+   (binding [*ns* (find-ns 'leiningen.core.project)]
+     (try (clojure.core/eval (read-string project-str))
+          (catch Exception e
+            (error (str "Could not read project map in '" file "': "
+                        (.getMessage e))))))
+   (let [project (resolve 'leiningen.core.project/project)]
+     (when-not project
+       (error (str "The project.clj must define a project map in: " file)))
+     (ns-unmap 'leiningen.core.project 'project)
+     (init-profiles (project-with-profiles @project) profiles))))
 
 
 (defn- jar-project
