@@ -14,7 +14,12 @@
              ;; "-XX:+TraceClassUnloading"
              ;; "-XX:+HeapDumpOnOutOfMemoryError"
              ]
-  :java-source-paths ["src-java"])
-
-;;; Sync changes to this file with pom.xml.
-;;; ---TODO: Add the :pom-plugins key when Leiningen 2.3.4 is released.
+  :java-source-paths ["src-java"]
+  :pom-plugins [[com.theoryinpractise/clojure-maven-plugin "1.3.15"
+                 {:extensions "true"
+                  :configuration ([:sourceDirectories [:sourceDirectory "src"]]
+                                  [:temporaryOutputDirectory "true"])
+                  :executions [:execution
+                               [:id "compile-clojure"]
+                               [:phase "compile"]
+                               [:goals [:goal "compile"]]]}]])
