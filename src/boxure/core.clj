@@ -93,7 +93,7 @@
               (map replace-root (:resource-paths project))
               [(replace-root (:compile-path project))]
               (map #(.getAbsolutePath ^File %) (.listFiles (File. (str good-root "/lib"))))))
-    (.getAbsolutePath file)))
+    [(.getAbsolutePath file)]))
 
 
 ;;; Boxure implementation.
