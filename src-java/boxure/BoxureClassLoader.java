@@ -48,6 +48,7 @@ public class BoxureClassLoader extends URLClassLoader {
     + "|dynapath.*"
     + "|useful.*"
     + "|classlojure\\.core.*"
+    + "|pedantic.*"
     + "|compile__stub.*"
     ;
 
