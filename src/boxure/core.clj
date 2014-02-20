@@ -18,6 +18,12 @@
   (:gen-class))
 
 
+;;; Remove memoize from leiningen.core.classpath/get-dependencies.
+
+(with-redefs [memoize identity]
+  (require 'leiningen.core.classpath :reload))
+
+
 ;;; Helper methods.
 
 (defn- error
@@ -170,10 +176,7 @@
   (let [project (file-project file (or (:profiles options) [:default]))
         dependencies (when (:resolve-dependencies options)
                        (map #(.getAbsolutePath ^File %)
-                            (resolve-dependencies :dependencies project
-                                                  ;; Memoize in leiningen.classpath/get-dependencies
-                                                  ;; is bad for our use case, this prevents it.
-                                                  :no-memoize (System/currentTimeMillis))))
+                            (resolve-dependencies :dependencies project)))
         classpath (concat (file-classpath file project) dependencies)
         urls (into-array URL (map (comp as-url (partial str "file:")) classpath))
         _ (when (:debug? options)
