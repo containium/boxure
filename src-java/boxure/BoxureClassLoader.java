@@ -21,6 +21,8 @@ public class BoxureClassLoader extends URLClassLoader {
     + "|clojure\\.lang\\.Agent.*"              // We require a threadpool per Clojure instance.
     + "|clojure\\.lang\\.DynamicClassLoader.*" // We require a class cache per Clojure instance.
     + "|clojure\\.lang\\.LispReader.*"         // Uses Compiler in SyntaxQuoteReader.syntaxQuote(..)
+    + "|clojure\\.lang\\.LockingTransaction.*" // Uses Agent, which needs isolation.
+    + "|clojure\\.lang\\.Ref.*"                // Uses LockingTransaction, which is isolated.
 
     // All Clojure functions that are loaded by Boxure need to be redefined,
     // such that they use the isolated classes.
