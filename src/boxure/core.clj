@@ -190,9 +190,7 @@
                                                     (:name project))
                         (str (:name project) "-BOX"))]
     (.start thread)
-    (let [start-thread (Thread/currentThread)]
-      (BoxureClassLoader/cleanThreadLocals start-thread)
-      (Boxure. (:name project) command-q thread box-cl project start-thread))))
+    (Boxure. (:name project) command-q thread box-cl project (Thread/currentThread))))
 
 
 (defn eval
