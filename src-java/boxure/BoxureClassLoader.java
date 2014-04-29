@@ -3,6 +3,9 @@ package boxure;
 import clojure.lang.DynamicClassLoader;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.lang.reflect.Field;
+import java.lang.reflect.Array;
+import java.lang.ref.Reference;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.Arrays;
@@ -109,4 +112,67 @@ public class BoxureClassLoader extends URLClassLoader {
     }
   }
 
+
+  /** ThreadLocal clearing. **/
+
+  private static Field threadLocalsField = null;
+  private static Class threadLocalMapClass = null;
+  private static Field tableField = null;
+  private static Field referentField = null;
+  private static Field entryField = null;
+
+  static {
+    try {
+      threadLocalsField = Thread.class.getDeclaredField("threadLocals");
+      threadLocalsField.setAccessible(true);
+      threadLocalMapClass = Class.forName("java.lang.ThreadLocal$ThreadLocalMap");
+      tableField = threadLocalMapClass.getDeclaredField("table");
+      tableField.setAccessible(true);
+      referentField = Reference.class.getDeclaredField("referent");
+      referentField.setAccessible(true);
+    } catch (Exception ex) {
+      throw new RuntimeException(ex);
+    }
+  }
+
+  public static void cleanThreadLocals() {
+    cleanThreadLocals(Thread.currentThread());
+  }
+
+  public static void cleanThreadLocals(Thread thread) {
+    try {
+      // Get a reference to the thread locals table of the current thread
+      Object threadLocalTable = threadLocalsField.get(thread);
+
+      if (threadLocalTable != null) {
+        // Get a reference to the array holding the thread local variables inside the
+        // ThreadLocalMap of the current thread
+        Object table = tableField.get(threadLocalTable);
+
+        // The key to the ThreadLocalMap is a WeakReference object. The referent field of this
+        // object is a reference to the actual ThreadLocal variable
+        for (int i=0; i < Array.getLength(table); i++) {
+          // Each entry in the table array of ThreadLocalMap is an Entry object
+          // representing the thread local reference and its value
+          Reference entry = (Reference)Array.get(table, i);
+          if (entry != null) {
+            // Get a reference to the thread local object and remove it from the table
+            ThreadLocal threadLocal = (ThreadLocal)referentField.get(entry);
+            threadLocal.remove();
+
+            // Clean the entry.
+            if (entryField == null) {
+              entryField = entry.getClass().getDeclaredField("value");
+              entryField.setAccessible(true);
+            }
+            entry.clear();
+            entryField.set(entry, null);
+          }
+        }
+      }
+    } catch(Exception e) {
+      // We will tolerate an exception here and just log it
+      throw new IllegalStateException(e);
+    }
+  }
 }

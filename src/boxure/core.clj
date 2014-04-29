@@ -143,7 +143,7 @@
 
 ;;; Boxure library API.
 
-(defrecord Boxure [name command-q thread box-cl project])
+(defrecord Boxure [name command-q thread box-cl project start-thread])
 
 (defn boxure
   "Creat a new box, based on a parent classloader and a File to the
@@ -190,7 +190,9 @@
                                                     (:name project))
                         (str (:name project) "-BOX"))]
     (.start thread)
-    (Boxure. (:name project) command-q thread box-cl project)))
+    (let [start-thread (Thread/currentThread)]
+      (BoxureClassLoader/cleanThreadLocals start-thread)
+      (Boxure. (:name project) command-q thread box-cl project start-thread))))
 
 
 (defn eval
@@ -224,7 +226,11 @@
   [box]
   (eval box '(shutdown-agents))
   (eval box '(clojure.lang.Var/resetThreadBindingFrame nil))
-  (stop box))
+  (stop box)
+  (BoxureClassLoader/cleanThreadLocals)
+  (when-let [start-thread (:start-thread box)]
+    (when (not= (Thread/currentThread) start-thread)
+      (BoxureClassLoader/cleanThreadLocals start-thread))))
 
 
 (defn call-in-box
