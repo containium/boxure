@@ -17,26 +17,13 @@ public class BoxureClassLoader extends URLClassLoader {
 
 
   private final static String ISOLATE =
-       "clojure\\.lang\\.RT.*"                 // Uses Compiler and Namespace, which need isolation.
-    + "|clojure\\.lang\\.Compiler.*"
-    + "|clojure\\.lang\\.Namespace.*"          // Holds the defined vars in a static.
-    + "|clojure\\.lang\\.Var.*"                // Uses Namespace, which needs isolation.
-    + "|clojure\\.lang\\.Agent.*"              // We require a threadpool per Clojure instance.
-    + "|clojure\\.lang\\.DynamicClassLoader.*" // We require a class cache per Clojure instance.
-    + "|clojure\\.lang\\.LispReader.*"         // Uses Compiler in SyntaxQuoteReader.syntaxQuote(..)
-    + "|clojure\\.lang\\.LockingTransaction.*" // Uses Agent, which needs isolation.
-    + "|clojure\\.lang\\.Ref.*"                // Uses LockingTransaction, which is isolated.
+       "clojure\\.lang\\.Agent.*"              // We require a threadpool per Clojure instance.
+//    + "|clojure\\.lang\\.LockingTransaction.*" // Uses Agent, which needs isolation.
+//    + "|clojure\\.lang\\.Ref.*"                // Uses LockingTransaction, which is isolated.
 
     // All Clojure functions that are loaded by Boxure need to be redefined,
     // such that they use the isolated classes.
-    + "|clojure\\.core.*"
     + "|clojure\\.main.*"
-    + "|clojure\\.genclass.*"
-    + "|clojure\\.gvec.*"
-    + "|clojure\\.instant.*"
-    + "|clojure\\.uuid.*"
-    + "|clojure\\.java.*"
-    + "|clojure\\.string.*"
     + "|clojure\\.edn.*"
     + "|clojure\\.walk.*"
     + "|clojure\\.set.*"

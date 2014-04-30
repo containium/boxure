@@ -104,13 +104,6 @@
 
 ;;; Boxure implementation.
 
-(defn- eval-in-boxure
-  [box-cl form]
-  (let [bound-form `(clojure.main/with-bindings (clojure.core/eval '~form))]
-    (with-classloader box-cl
-      (invoke-in box-cl clojure.lang.Compiler/eval [Object] bound-form))))
-
-
 (defn- log
   [options message]
   (when (:debug? options)
@@ -118,10 +111,12 @@
 
 
 (defn- boxure-thread-fn
-  [^BoxureClassLoader box-cl classpath ^LinkedBlockingQueue command-q options name]
+  [^BoxureClassLoader box-cl classpath ^LinkedBlockingQueue command-q options name loaded]
   (fn []
     (.loadClass box-cl "clojure.lang.RT")
-    (eval-in* box-cl '(require 'clojure.main))
+    (.setContextClassLoader (Thread/currentThread) box-cl)
+    (clojure.core/push-thread-bindings {#'clojure.core/*ns-root* box-cl, #'clojure.core/*loaded-libs* loaded, #_clojure.lang.Compiler/LOADER #_box-cl})
+    (require 'clojure.main)
     (log options (str "[Boxure " name " ready for commands]"))
     (loop []
       (if-let [command (.poll command-q 60 TimeUnit/SECONDS)]
@@ -133,7 +128,9 @@
                                   (str (subs (pr-str form) 0 30) "...")
                                   form-pr)
                                 "]"))
-                result (try (eval-in-boxure box-cl form)
+                result (try (clojure.lang.Compiler/eval form
+                              ;`(clojure.main/with-bindings (clojure.core/eval '~form))
+                              )
                             (catch Throwable e e))]
             (when promise (deliver promise result))
             (recur))
@@ -143,7 +140,7 @@
 
 ;;; Boxure library API.
 
-(defrecord Boxure [name command-q thread box-cl project start-thread])
+(defrecord Boxure [name command-q thread box-cl project start-thread loaded])
 
 (defn boxure
   "Creat a new box, based on a parent classloader and a File to the
@@ -186,11 +183,12 @@
         box-cl (BoxureClassLoader. urls parent-cl
                                    (apply str (interpose "|" (:isolates options)))
                                    (boolean (:debug? options)))
+        loaded (ref (sorted-set))
         thread (Thread. ^Runnable (boxure-thread-fn box-cl classpath command-q options
-                                                    (:name project))
+                                                    (:name project) loaded)
                         (str (:name project) "-BOX"))]
     (.start thread)
-    (Boxure. (:name project) command-q thread box-cl project (Thread/currentThread))))
+    (Boxure. (:name project) command-q thread box-cl project (Thread/currentThread) loaded)))
 
 
 (defn eval
@@ -222,9 +220,9 @@
   "The same as `stop`, with some added calls to clean up the Clojure
   runtime inside the box. This prevents memory leaking boxes."
   [box]
+  (stop box)
   (eval box '(shutdown-agents))
   (eval box '(clojure.lang.Var/resetThreadBindingFrame nil))
-  (stop box)
   (BoxureClassLoader/cleanThreadLocals)
   (when-let [start-thread (:start-thread box)]
     (when (not= (Thread/currentThread) start-thread)
@@ -234,5 +232,11 @@
 (defn call-in-box
   "Expirimental, as this might cause leaks?"
   [box f & args]
-  (with-classloader (:box-cl box)
-    (apply f args)))
+  (try
+    (with-classloader (:box-cl box)
+      #_(prn (:name box) "loaded:" (:loaded box) (Thread/currentThread) (:thread box) " == " (= (Thread/currentThread) (:thread box))
+         (.getContextClassLoader (Thread/currentThread)) (.getContextClassLoader (:thread box)) " == "
+         (= (.getContextClassLoader (Thread/currentThread)) (.getContextClassLoader (:thread box))))
+      (clojure.core/push-thread-bindings {#'clojure.core/*ns-root* (:box-cl box), #'clojure.core/*loaded-libs* (:loaded box), clojure.lang.Compiler/LOADER (:box-cl box)})
+      (apply f args))
+    (finally (clojure.core/pop-thread-bindings))))
