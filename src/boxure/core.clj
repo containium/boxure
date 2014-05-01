@@ -210,7 +210,7 @@
   [box]
   (.offer ^LinkedBlockingQueue (:command-q box) :stop)
   (future (while (.isAlive ^Thread (:thread box))
-            (Thread/sleep 200))
+            (Thread/sleep 20))
           :stopped))
 
 
@@ -218,9 +218,10 @@
   "The same as `stop`, with some added calls to clean up the Clojure
   runtime inside the box. This prevents memory leaking boxes."
   [box]
-  (stop box)
+  @(stop box)
   (eval box '(shutdown-agents))
   (eval box '(clojure.lang.Var/resetThreadBindingFrame nil))
+  (.remove (clojure.lang.Namespace/namespaces) (:box-cl box))
   (when-let [start-thread (:start-thread box)]
     (when (not= (Thread/currentThread) start-thread)
       (BoxureClassLoader/cleanThreadLocals start-thread))))
