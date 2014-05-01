@@ -115,7 +115,7 @@
   (fn []
     (.loadClass box-cl "clojure.lang.RT")
     (.setContextClassLoader (Thread/currentThread) box-cl)
-    (clojure.core/push-thread-bindings {#'clojure.core/*ns-root* box-cl, #'clojure.core/*loaded-libs* loaded, #_clojure.lang.Compiler/LOADER #_box-cl})
+    (clojure.core/push-thread-bindings {#'clojure.core/*ns-root* box-cl, #'clojure.core/*loaded-libs* loaded, clojure.lang.Compiler/LOADER box-cl})
     (require 'clojure.main) ; This is mostly to setup the loaded namespace and compiler state in this Thread, and allow (ns ..) evals.
     (log options (str "[Boxure " name " ready for commands]"))
     (loop []
@@ -213,6 +213,24 @@
             (Thread/sleep 20))
           :stopped))
 
+(defn is-loaded-by-classloader? [classloader object]
+  (when object
+    (loop [cl (.getClassLoader (if (class? object) object #_else (class object)))]
+      (or (= cl classloader)
+          (if-let [cl (when cl (.getParent cl))] (recur cl) #_else false)))))
+
+(defn remove-classloaded-methods! [classloader ^clojure.lang.MultiFn multifn]
+  (let [is-loaded-by-classloader? (partial is-loaded-by-classloader? classloader)]
+    (->> (prefers multifn)
+         (remove (comp is-loaded-by-classloader? key))
+         (map (fn [[k v]] [k (set (remove is-loaded-by-classloader? v))]))
+         (into (hash-map))
+         (.setPreferTable multifn))
+    (doseq [[k v] (methods multifn)]
+      (when (is-loaded-by-classloader? k)
+        (remove-method multifn k))
+      (when (is-loaded-by-classloader? v)
+        (remove-method multifn k)))))
 
 (defn clean-and-stop
   "The same as `stop`, with some added calls to clean up the Clojure
@@ -221,7 +239,10 @@
   @(stop box)
   (eval box '(shutdown-agents))
   (eval box '(clojure.lang.Var/resetThreadBindingFrame nil))
+  (remove-classloaded-methods! (:box-cl box) clojure.core/print-method)
+  (remove-classloaded-methods! (:box-cl box) clojure.core/print-dup)
   (.remove (clojure.lang.Namespace/namespaces) (:box-cl box))
+  (BoxureClassLoader/cleanThreadLocals (:thread box))
   (when-let [start-thread (:start-thread box)]
     (when (not= (Thread/currentThread) start-thread)
       (BoxureClassLoader/cleanThreadLocals start-thread))))
