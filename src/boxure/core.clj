@@ -215,7 +215,7 @@
 
 (defn is-loaded-by-classloader? [classloader object]
   (when object
-    (loop [cl (.getClassLoader (if (class? object) object #_else (class object)))]
+    (loop [cl (.getClassLoader (if (class? object) ^Class object #_else (class object)))]
       (or (= cl classloader)
           (if-let [cl (when cl (.getParent cl))] (recur cl) #_else false)))))
 
