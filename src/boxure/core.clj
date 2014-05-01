@@ -116,7 +116,7 @@
     (.loadClass box-cl "clojure.lang.RT")
     (.setContextClassLoader (Thread/currentThread) box-cl)
     (clojure.core/push-thread-bindings {#'clojure.core/*ns-root* box-cl, #'clojure.core/*loaded-libs* loaded, #_clojure.lang.Compiler/LOADER #_box-cl})
-    (require 'clojure.main)
+    (require 'clojure.main) ; This is mostly to setup the loaded namespace and compiler state in this Thread, and allow (ns ..) evals.
     (log options (str "[Boxure " name " ready for commands]"))
     (loop []
       (if-let [command (.poll command-q 60 TimeUnit/SECONDS)]
@@ -128,9 +128,7 @@
                                   (str (subs (pr-str form) 0 30) "...")
                                   form-pr)
                                 "]"))
-                result (try (clojure.lang.Compiler/eval form
-                              ;`(clojure.main/with-bindings (clojure.core/eval '~form))
-                              )
+                result (try (clojure.main/with-bindings (clojure.lang.Compiler/eval form))
                             (catch Throwable e e))]
             (when promise (deliver promise result))
             (recur))
@@ -223,7 +221,6 @@
   (stop box)
   (eval box '(shutdown-agents))
   (eval box '(clojure.lang.Var/resetThreadBindingFrame nil))
-  (BoxureClassLoader/cleanThreadLocals)
   (when-let [start-thread (:start-thread box)]
     (when (not= (Thread/currentThread) start-thread)
       (BoxureClassLoader/cleanThreadLocals start-thread))))
