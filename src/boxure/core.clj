@@ -5,6 +5,7 @@
 (ns boxure.core
   (:refer-clojure :exclude (eval))
   (:require [clojure.edn :as edn]
+            [clojure.main] ; For lein compile :all
             [clojure.java.io :refer (as-url file)]
             [leiningen.core.project :refer (init-profiles project-with-profiles)]
             [leiningen.core.classpath :refer (resolve-dependencies)]
