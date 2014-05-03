@@ -19,6 +19,10 @@
   (:gen-class))
 
 
+;;; Patched clojure.core vars
+
+(def ns-root-var (try (clojure.core/eval '#'clojure.core/*ns-root*) (catch java.lang.RuntimeException e)))
+
 ;;; Remove memoize from leiningen.core.classpath/get-dependencies.
 
 (with-redefs [memoize identity]
@@ -139,7 +143,7 @@
 
 ;;; Boxure library API.
 
-(defrecord Boxure [name command-q thread box-cl project start-thread loaded])
+(defrecord Boxure [name command-q thread box-cl project start-thread loaded bindings])
 
 (defn boxure
   "Creat a new box, based on a parent classloader and a File to the
@@ -183,11 +187,12 @@
                                    (apply str (interpose "|" (:isolates options)))
                                    (boolean (:debug? options)))
         loaded (ref (sorted-set))
+        bindings {ns-root-var box-cl, #'clojure.core/*loaded-libs* loaded, clojure.lang.Compiler/LOADER box-cl}
         thread (Thread. ^Runnable (boxure-thread-fn box-cl classpath command-q options
                                                     (:name project) loaded)
                         (str (:name project) "-BOX"))]
     (.start thread)
-    (Boxure. (:name project) command-q thread box-cl project (Thread/currentThread) loaded)))
+    (Boxure. (:name project) command-q thread box-cl project (Thread/currentThread) loaded bindings)))
 
 
 (defn eval
@@ -242,7 +247,7 @@
   (eval box '(clojure.lang.Var/resetThreadBindingFrame nil))
   (remove-classloaded-methods! (:box-cl box) clojure.core/print-method)
   (remove-classloaded-methods! (:box-cl box) clojure.core/print-dup)
-  (.remove (clojure.lang.Namespace/namespaces) (:box-cl box))
+  (when ns-root-var (.remove ^java.util.Map (clojure.core/eval '(clojure.lang.Namespace/namespaces)) (:box-cl box)))
   (BoxureClassLoader/cleanThreadLocals (:thread box))
   (when-let [start-thread (:start-thread box)]
     (when (not= (Thread/currentThread) start-thread)
@@ -251,12 +256,12 @@
 
 (defn call-in-box
   "Expirimental, as this might cause leaks?"
-  [box f & args]
+  [^Boxure box f & args]
   (try
-    (with-classloader (:box-cl box)
+    (with-classloader (.box-cl box)
       #_(prn (:name box) "loaded:" (:loaded box) (Thread/currentThread) (:thread box) " == " (= (Thread/currentThread) (:thread box))
          (.getContextClassLoader (Thread/currentThread)) (.getContextClassLoader (:thread box)) " == "
          (= (.getContextClassLoader (Thread/currentThread)) (.getContextClassLoader (:thread box))))
-      (clojure.core/push-thread-bindings {#'clojure.core/*ns-root* (:box-cl box), #'clojure.core/*loaded-libs* (:loaded box), clojure.lang.Compiler/LOADER (:box-cl box)})
+      (clojure.core/push-thread-bindings (.bindings box))
       (apply f args))
     (finally (clojure.core/pop-thread-bindings))))
