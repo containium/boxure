@@ -116,11 +116,10 @@
 
 
 (defn- boxure-thread-fn
-  [^BoxureClassLoader box-cl classpath ^LinkedBlockingQueue command-q options name loaded]
+  [^BoxureClassLoader box-cl classpath ^LinkedBlockingQueue command-q options name bindings]
   (fn []
-    (.loadClass box-cl "clojure.lang.RT")
     (.setContextClassLoader (Thread/currentThread) box-cl)
-    (clojure.core/push-thread-bindings {#'clojure.core/*ns-root* box-cl, #'clojure.core/*loaded-libs* loaded, clojure.lang.Compiler/LOADER box-cl})
+    (clojure.core/push-thread-bindings bindings)
     (require 'clojure.main) ; This is mostly to setup the loaded namespace and compiler state in this Thread, and allow (ns ..) evals.
     (log options (str "[Boxure " name " ready for commands]"))
     (loop []
@@ -143,7 +142,7 @@
 
 ;;; Boxure library API.
 
-(defrecord Boxure [name command-q thread box-cl project start-thread loaded bindings])
+(defrecord Boxure [name command-q thread box-cl project start-thread bindings])
 
 (defn boxure
   "Creat a new box, based on a parent classloader and a File to the
@@ -186,13 +185,19 @@
         box-cl (BoxureClassLoader. urls parent-cl
                                    (apply str (interpose "|" (:isolates options)))
                                    (boolean (:debug? options)))
-        loaded (ref (sorted-set))
-        bindings {ns-root-var box-cl, #'clojure.core/*loaded-libs* loaded, clojure.lang.Compiler/LOADER box-cl}
+        loaded (ref (sorted-set 'clojure.core
+                                'clojure.core.protocols
+                                'clojure.uuid 'clojure.instant
+                                'clojure.java.io 'clojure.string))
+        bindings {;ns-root-var box-cl
+                  clojure.lang.Compiler/LOADER box-cl ; dynamic-cl
+                  #'clojure.core/*use-context-classloader* true
+                  #'clojure.core/*loaded-libs* loaded}
         thread (Thread. ^Runnable (boxure-thread-fn box-cl classpath command-q options
-                                                    (:name project) loaded)
+                                                    (:name project) bindings)
                         (str (:name project) "-BOX"))]
     (.start thread)
-    (Boxure. (:name project) command-q thread box-cl project (Thread/currentThread) loaded bindings)))
+    (Boxure. (:name project) command-q thread box-cl project (Thread/currentThread) bindings)))
 
 
 (defn eval
@@ -202,9 +207,9 @@
   be delivered. If a Throwable was raised during evaluation, it is
   caught by the box and delivered through the promise as well. If an
   Error was raised, it may be best to kill the box."
-  [box form]
+  [^Boxure box form]
   (let [answer (promise)]
-    (.offer ^LinkedBlockingQueue (:command-q box) [form answer])
+    (.offer ^LinkedBlockingQueue (.command-q box) [form answer])
     answer))
 
 
@@ -213,9 +218,9 @@
   A future is returned, which will be delivered when the thread has
   stopped. Forms queued after the stop command will not be evaluated
   anymore."
-  [box]
-  (.offer ^LinkedBlockingQueue (:command-q box) :stop)
-  (future (while (.isAlive ^Thread (:thread box))
+  [^Boxure box]
+  (.offer ^LinkedBlockingQueue (.command-q box) :stop)
+  (future (while (.isAlive ^Thread (.thread box))
             (Thread/sleep 20))
           :stopped))
 
@@ -241,17 +246,19 @@
 (defn clean-and-stop
   "The same as `stop`, with some added calls to clean up the Clojure
   runtime inside the box. This prevents memory leaking boxes."
-  [box]
+  [^Boxure box]
   @(stop box)
   (eval box '(shutdown-agents))
   (eval box '(clojure.lang.Var/resetThreadBindingFrame nil))
-  (remove-classloaded-methods! (:box-cl box) clojure.core/print-method)
-  (remove-classloaded-methods! (:box-cl box) clojure.core/print-dup)
-  (when ns-root-var (.remove ^java.util.Map (clojure.core/eval '(clojure.lang.Namespace/namespaces)) (:box-cl box)))
-  (BoxureClassLoader/cleanThreadLocals (:thread box))
-  (when-let [start-thread (:start-thread box)]
+  (remove-classloaded-methods! (.box-cl box) clojure.core/print-method)
+  (remove-classloaded-methods! (.box-cl box) clojure.core/print-dup)
+  (.setContextClassLoader ^Thread (.thread box) nil)
+  (BoxureClassLoader/cleanThreadLocals (.thread box))
+  (when-let [start-thread (.start-thread box)]
     (when (not= (Thread/currentThread) start-thread)
-      (BoxureClassLoader/cleanThreadLocals start-thread))))
+      (BoxureClassLoader/cleanThreadLocals start-thread)))
+  (.close ^BoxureClassLoader (. box box-cl))
+  (BoxureClassLoader/gc))
 
 
 (defn call-in-box

@@ -14,8 +14,11 @@ import java.util.HashSet;
 import java.util.regex.Pattern;
 
 
-public class BoxureClassLoader extends URLClassLoader {
+public class BoxureClassLoader extends DynamicClassLoader {
 
+  static {
+      registerAsParallelCapable();
+  }
 
   private final static String ISOLATE =
        "clojure\\.lang\\.Agent.*"              // We require a threadpool per Clojure instance.
@@ -46,14 +49,12 @@ public class BoxureClassLoader extends URLClassLoader {
     ;
 
 
-  private ClassLoader parent = null;
-  private String userIsolate = null;
-  private boolean logging = false;
+  private final String userIsolate;
+  private final boolean logging;
 
   public BoxureClassLoader(final URL[] urls, final ClassLoader parent, final String userIsolate,
                            final boolean logging) {
-    super(urls, parent);
-    this.parent = parent;
+    super(urls, parent, new clojure.lang.LoaderContext());
     this.userIsolate = userIsolate;
     this.logging = logging;
   }
