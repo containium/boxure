@@ -6,6 +6,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Field;
 import java.lang.reflect.Array;
 import java.lang.ref.Reference;
+import java.lang.ref.WeakReference;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.Arrays;
@@ -119,6 +120,16 @@ public class BoxureClassLoader extends URLClassLoader {
       referentField.setAccessible(true);
     } catch (Exception ex) {
       throw new RuntimeException(ex);
+    }
+  }
+
+  public static void gc() {
+    Object obj = new Object();
+    WeakReference ref = new WeakReference<Object>(obj);
+    //noinspection UnusedAssignment
+    obj = null;
+    while(ref.get() != null) {
+      System.gc();
     }
   }
 
