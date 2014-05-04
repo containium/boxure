@@ -145,7 +145,7 @@ public class BoxureClassLoader extends URLClassLoader {
           if (entry != null) {
             // Get a reference to the thread local object and remove it from the table
             ThreadLocal threadLocal = (ThreadLocal)referentField.get(entry);
-            threadLocal.remove();
+            if (threadLocal != null) threadLocal.remove(); // somehow can be null sometimes!
 
             // Clean the entry.
             if (entryField == null) {
