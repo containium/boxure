@@ -1,6 +1,7 @@
 package boxure;
 
 import clojure.lang.DynamicClassLoader;
+import clojure.lang.RT;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Field;
@@ -86,6 +87,28 @@ public class BoxureClassLoader extends DynamicClassLoader {
       try {
         final Class<?> superClazz = super.loadClass(name, resolve);
         log("[Boxure loading class "+ name +" by normal classloading.]");
+        if (this != superClazz.getClassLoader()) {
+          log("  |- class was loaded outside box, (need to resolve? " + resolve + ") by: "+ superClazz.getClassLoader() +" ]");
+          log("  |- current context ClassLoader: "+ Thread.currentThread().getContextClassLoader() +"]");
+          if (name.endsWith(RT.LOADER_SUFFIX)) {
+            // This is pre-compiled Clojure class that needs to be initialized in the ROOT context,
+            // in order to create the Namespace object(s) related to this class.
+            if (!resolve) {
+              ClassLoader cl = Thread.currentThread().getContextClassLoader();
+              Thread.currentThread().setContextClassLoader(superClazz.getClassLoader());
+              log("  [forcing initialization in ROOT]");
+              try {
+                Class.forName(name, true, superClazz.getClassLoader());
+              } finally {
+                Thread.currentThread().setContextClassLoader(cl);
+              }
+            }
+            // Inject the required Namespace into the current loader context, otherwise we get:
+            // java.lang.ExceptionInInitializerError Caused by: 'No namespace: ... found'
+            Object injected = context.injectNamespaces(clojure.lang.LoaderContext.ROOT, name.substring(0, name.length() - RT.LOADER_SUFFIX.length()));
+            log("  [injected outer namespaces: "+ injected +"]");
+          }
+        }
         return superClazz;
       } catch (ClassNotFoundException cnfe2) {
         log("[Boxure could not load "+ name +" by normal classloading]");
