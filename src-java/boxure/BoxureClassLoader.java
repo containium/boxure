@@ -77,26 +77,26 @@ public class BoxureClassLoader extends DynamicClassLoader {
     if (name.matches(ISOLATE) || name.matches(userIsolate)) {
       try {
         final Class<?> isoClazz = super.findClass(name);
-        log("[Boxure loading class "+ name +" in isolation]");
+        if (logging) log("[Boxure loading class "+ name +" in isolation]");
         return isoClazz;
       } catch (ClassNotFoundException cnfe) {
-        log("[Boxure could not load class "+ name +" in isolation]");
+        if (logging) log("[Boxure could not load class "+ name +" in isolation]");
         throw cnfe;
       }
     } else {
       try {
         final Class<?> superClazz = super.loadClass(name, resolve);
-        log("[Boxure loading class "+ name +" by normal classloading.]");
+        if (logging) log("[Boxure loading class "+ name +" by normal classloading.]");
         if (this != superClazz.getClassLoader()) {
-          log("  |- class was loaded outside box, (need to resolve? " + resolve + ") by: "+ superClazz.getClassLoader() +" ]");
-          log("  |- current context ClassLoader: "+ Thread.currentThread().getContextClassLoader() +"]");
+          if (logging) log("  |- class was loaded outside box, (need to resolve? " + resolve + ") by: "+ superClazz.getClassLoader());
+          if (logging) log("  |- current context ClassLoader: "+ Thread.currentThread().getContextClassLoader());
           if (name.endsWith(RT.LOADER_SUFFIX)) {
             // This is pre-compiled Clojure class that needs to be initialized in the ROOT context,
             // in order to create the Namespace object(s) related to this class.
             if (!resolve) {
               ClassLoader cl = Thread.currentThread().getContextClassLoader();
               Thread.currentThread().setContextClassLoader(superClazz.getClassLoader());
-              log("  [forcing initialization in ROOT]");
+              if (logging) log("  [forcing initialization in ROOT]");
               try {
                 Class.forName(name, true, superClazz.getClassLoader());
               } finally {
@@ -106,12 +106,12 @@ public class BoxureClassLoader extends DynamicClassLoader {
             // Inject the required Namespace into the current loader context, otherwise we get:
             // java.lang.ExceptionInInitializerError Caused by: 'No namespace: ... found'
             Object injected = context.injectNamespaces(clojure.lang.LoaderContext.ROOT, name.substring(0, name.length() - RT.LOADER_SUFFIX.length()));
-            log("  [injected outer namespaces: "+ injected +"]");
+            if (logging) log("  [injected outer namespaces: "+ injected +"]");
           }
         }
         return superClazz;
       } catch (ClassNotFoundException cnfe2) {
-        log("[Boxure could not load "+ name +" by normal classloading]");
+        if (logging) log("[Boxure could not load "+ name +" by normal classloading]");
         throw cnfe2;
       }
     }
