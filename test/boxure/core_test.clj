@@ -26,7 +26,9 @@
             (eval box '(prn (map->Foo {:baz "THE Alice?"}))))
 
         ;; Using functions directly.
-        (prn ((deref (eval box 'map->Foo)) {:baz "Nope, just Bob."}))
+        (prn ((eval box 'map->Foo) {:baz "Nope, just Bob."}))
+        ;; Requiring namespaces in a Future and evalling immediately
+        (prn (@(future (eval box '(do (require 'clojure.set) (clojure.set/union)))) {}))
 
         ;; Using a function that defines new things.
         (do (eval box '(defn foo [s] (def bar (fn [] s))))
@@ -34,14 +36,14 @@
             ;; Evaluate defining function within box thread.
             (eval box '(prn (do (foo "baz")
                                 (bar))))
-            (prn ((deref (eval box 'bar))))
+            (prn ((eval box 'bar)))
 
             ;; Evaluate defining function within this thread, but context classloader set to box's.
-            (call-in-box box (deref (eval box 'foo)) "eve")
-            (prn ((deref (eval box 'bar))))
+            (call-in-box box (eval box 'foo) "eve")
+            (prn ((eval box 'bar)))
 
             ;; Evaluate defining function within this thread, not setting any classloader.
-            ((deref (eval box 'foo)) "henk")
+            ((eval box 'foo) "henk")
             (eval box '(prn bar))
             (eval box '(prn (bar))))
 
