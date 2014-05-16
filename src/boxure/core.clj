@@ -19,10 +19,13 @@
   (:gen-class))
 
 
-;;; Remove memoize from leiningen.core.classpath/get-dependencies.
-
-(with-redefs [memoize identity]
-  (require 'leiningen.core.classpath :reload))
+;; Make sure JAR streams are not cached.
+(try
+  ;; URL needs to be well-formed, but does not need to exist
+  (.. (URL. "jar:file://dummy.jar!/") openConnection (setDefaultUseCaches false))
+  (catch Exception ex
+    (println "[!!] Could not disable JAR stream caches. Caused by:"
+             (with-out-str (.printStackTrace ex)))))
 
 
 ;;; Helper methods.
@@ -241,4 +244,3 @@
       (.setContextClassLoader ^Thread current-thread box nil)))
   (.close ^BoxureClassLoader (. box box-cl))
   (BoxureClassLoader/gc))
-
