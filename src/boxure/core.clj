@@ -55,7 +55,7 @@
      (try (clojure.core/eval (read-string project-str))
           (catch Exception e
             (error (str "Could not read project map in '" file "': "
-                        (.getMessage e))))))
+                        (with-out-str (.printStackTrace e)))))))
    (let [project (resolve 'leiningen.core.project/project)]
      (when-not project
        (error (str "The project.clj must define a project map in: " file)))
@@ -241,6 +241,6 @@
 
   (let [current-thread (Thread/currentThread)]
     (when (= (.box-cl box) (.getContextClassLoader current-thread))
-      (.setContextClassLoader ^Thread current-thread box nil)))
+      (.setContextClassLoader ^Thread current-thread nil)))
   (.close ^BoxureClassLoader (. box box-cl))
   (BoxureClassLoader/gc))
