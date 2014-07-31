@@ -21,7 +21,7 @@ public class BoxureClassLoader extends DynamicClassLoader {
       registerAsParallelCapable();
   }
 
-  private final static String ISOLATE =
+  public final static String ISOLATE =
        "clojure\\.lang\\.Agent.*"              // We require a threadpool per Clojure instance.
 //    + "|clojure\\.lang\\.LockingTransaction.*" // Uses Agent, which needs isolation.
 //    + "|clojure\\.lang\\.Ref.*"                // Uses LockingTransaction, which is isolated.
