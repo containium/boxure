@@ -3,7 +3,7 @@
   :url "http://github.com/containium/boxure"
   :license {:name "Mozilla Public License 2.0"
             :url "http://mozilla.org/MPL/2.0/"}
-  :dependencies [[boxure/clojure "1.5.1"]
+  :dependencies [[boxure/clojure "1.7.0"]
 
                  ;; Until Leiningen fixes it's plexus and wagon deps, we add and upgrade it explicitly:
                  [leiningen-core "2.3.4" :exclusions [org.clojure/clojure org.codehaus.plexus/plexus-utils org.apache.maven.wagon/wagon-provider-api]]
@@ -21,7 +21,6 @@
              ;; "-XX:+HeapDumpOnOutOfMemoryError"
              ]
   :java-source-paths ["src-java"]
-  :global-vars {*warn-on-reflection* true}
   :pom-plugins [[com.theoryinpractise/clojure-maven-plugin "1.3.15"
                  {:extensions "true"
                   :configuration ([:sourceDirectories [:sourceDirectory "src"]]
