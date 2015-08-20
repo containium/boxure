@@ -71,8 +71,18 @@ public class BoxureClassLoader extends DynamicClassLoader {
   protected Class<?> loadClass(final String name, final boolean resolve)
     throws ClassNotFoundException {
 
-    final Class<?> clazz = super.findLoadedClass(name);
-    if (clazz != null) return clazz;
+    Class<?> clazz = super.findLoadedClass(name);
+    if (clazz == null) clazz = DynamicClassLoader.findInMemoryClass(context, name);
+    if (clazz != null) {
+      if (logging) {
+        log("[Boxure returning already loading class: "+ name +"]");
+        if (this != clazz.getClassLoader() && name.endsWith(RT.LOADER_SUFFIX)) {
+          Object injected = context.injectNamespaces(clojure.lang.LoaderContext.ROOT, name.substring(0, name.length() - RT.LOADER_SUFFIX.length()));
+          log("  [injected outer namespaces: "+ injected +"]");
+        }
+      }
+      return clazz;
+    }
 
     if (name.matches(ISOLATE) || name.matches(userIsolate)) {
       try {
