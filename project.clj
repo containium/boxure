@@ -6,9 +6,9 @@
   :dependencies [[boxure/clojure "1.7.0"]
 
                  ;; Until Leiningen fixes it's plexus and wagon deps, we add and upgrade it explicitly:
-                 [leiningen-core "2.3.4" :exclusions [org.clojure/clojure org.codehaus.plexus/plexus-utils org.apache.maven.wagon/wagon-provider-api]]
-                 [org.codehaus.plexus/plexus-utils "3.0.16"]
-                 [org.apache.maven.wagon/wagon-provider-api "2.4"]
+                 [leiningen-core "2.5.3" :exclusions [org.clojure/clojure org.codehaus.plexus/plexus-utils org.apache.maven.wagon/wagon-provider-api]]
+                 [org.codehaus.plexus/plexus-utils "3.0.22"]
+                 [org.apache.maven.wagon/wagon-provider-api "2.10"]
 
                  [classlojure "0.6.6"]]
   :exclusions [org.clojure/clojure]
