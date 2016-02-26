@@ -11,6 +11,9 @@
 
 (deftest a-test
   (testing "Leaking"
+    ;; Ensure an Agent thread pool is (also) running in ROOT
+    (send (agent "\nAgent has started\n") println)
+
     (doseq [i (range 10)]
       (println "Starting, testing and stopping box nr" (inc i))
       (let [box (boxure {:resolve-dependencies true
@@ -41,6 +44,10 @@
             ;; Evaluate defining function within this thread, but context classloader set to box's.
             (call-in-box box (eval box 'foo) "eve")
             (prn ((eval box 'bar)))
+
+            ;; Start an agent threadpool
+            (eval box '(def wout (agent 0)))
+            (eval box '(send wout inc))
 
             ;; Evaluate defining function within this thread, not setting any classloader.
             ((eval box 'foo) "henk")
