@@ -22,29 +22,27 @@ public class BoxureClassLoader extends DynamicClassLoader {
   }
 
   public final static String ISOLATE =
-       "clojure\\.lang\\.Agent.*"              // We require a threadpool per Clojure instance.
-//    + "|clojure\\.lang\\.LockingTransaction.*" // Uses Agent, which needs isolation.
-//    + "|clojure\\.lang\\.Ref.*"                // Uses LockingTransaction, which is isolated.
+    "clojure[./]lang[./]Agent.*"  // We want a threadpool per boxure instance.
 
     // All Clojure functions that are loaded by Boxure need to be redefined,
     // such that they use the isolated classes.
-    + "|clojure\\.main.*"
-    + "|clojure\\.edn.*"
-    + "|clojure\\.walk.*"
-    + "|clojure\\.set.*"
-    + "|clojure\\.tools.*"
-    + "|clojure\\.data.*"
-    + "|clojure\\.test.*"
-    + "|clojure\\.template.*"
-    + "|clojure\\.stacktrace.*"
-    + "|clojure\\.pprint.*"
-    + "|clojure\\.zip.*"
-    + "|boxure\\.core.*"
-    + "|leiningen\\.core.*"
-    + "|cemerick\\.pomegranate.*"
+    + "|clojure[./]main.*"
+    + "|clojure[./]edn.*"
+    + "|clojure[./]walk.*"
+    + "|clojure[./]set.*"
+    + "|clojure[./]tools.*"
+    + "|clojure[./]data.*"
+    + "|clojure[./]test.*"
+    + "|clojure[./]template.*"
+    + "|clojure[./]stacktrace.*"
+    + "|clojure[./]pprint.*"
+    + "|clojure[./]zip.*"
+    + "|boxure[./]core.*"
+    + "|leiningen[./]core.*"
+    + "|cemerick[./]pomegranate.*"
     + "|dynapath.*"
     + "|useful.*"
-    + "|classlojure\\.core.*"
+    + "|classlojure[./]core.*"
     + "|pedantic.*"
     + "|compile__stub.*"
     ;
@@ -127,6 +125,17 @@ public class BoxureClassLoader extends DynamicClassLoader {
     }
   }
 
+
+  public URL getResource(String name) {
+    if (name.matches(ISOLATE) || name.matches(userIsolate)) {
+      final URL resource = super.findResource(name);
+      if (logging) log("[Boxure loading resource "+ name +" in isolation]");
+      return resource;
+    } else {
+      if (logging) log("[Boxure loading resource "+ name +" checking parent first]");
+      return super.getResource(name);
+    }
+  }
 
   private void log(final String msg) {
     if (logging) {
